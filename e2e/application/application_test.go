@@ -18,6 +18,7 @@ package e2e
 
 import (
 	context2 "context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -42,6 +43,7 @@ var (
 	testDeleteJsonAppFile       = `{"name":"test-vela-delete","services":{"nginx-test":{"type":"webservice","image":"nginx:1.9.4","port":80}}}`
 	appbasicJsonAppFile         = `{"name":"app-basic","services":{"app-basic":{"type":"webservice","image":"nginx:1.9.4","port":80}}}`
 	appbasicAddTraitJsonAppFile = `{"name":"app-basic","services":{"app-basic":{"type":"webservice","image":"nginx:1.9.4","port":80,"scaler":{"replicas":2}}}}`
+	velaQL                      = "component-pod-view{appNs=default,appName=nginx-vela,name=nginx}"
 )
 
 var _ = ginkgo.Describe("Test Vela Application", func() {
@@ -67,6 +69,8 @@ var _ = ginkgo.Describe("Test Vela Application", func() {
 
 	e2e.JsonAppFileContext("json appfile apply", testDeleteJsonAppFile)
 	ApplicationDeleteWithForceOptions("test delete with force option", "test-vela-delete")
+
+	VelaQLPodListContext("ql", velaQL)
 })
 
 var ApplicationStatusContext = func(context string, applicationName string, workloadType string) bool {
@@ -226,6 +230,64 @@ var ApplicationDeleteWithForceOptions = func(context string, appName string) boo
 			output, err = e2e.ExecAndTerminate(cli)
 			gomega.Expect(err).NotTo(gomega.HaveOccurred())
 			gomega.Expect(output).To(gomega.ContainSubstring("deleted"))
+		})
+	})
+}
+
+type PodList struct {
+	PodList []Pod
+}
+
+type Pod struct {
+	Status   Status
+	Cluster  *string
+	Metadata Metadata
+	Workload Workload
+}
+
+type Status struct {
+	Phase    *string
+	NodeName *string
+}
+
+type Metadata struct {
+	Namespace *string
+}
+
+type Workload struct {
+	ApiVersion *string
+	Kind       *string
+}
+
+var VelaQLPodListContext = func(context string, velaQL string) bool {
+	return ginkgo.Context(context, func() {
+		ginkgo.It("should get result for executing vela ql", func() {
+			cli := fmt.Sprintf("vela ql %s", velaQL)
+			output, err := e2e.Exec(cli)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			var list PodList
+			err = json.Unmarshal([]byte(output), &list)
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			for _, v := range list.PodList {
+				if v.Cluster != nil && *v.Cluster != "" {
+					gomega.Expect(v.Cluster).To(gomega.ContainSubstring("local"))
+				}
+				if v.Status.Phase != nil && *v.Status.Phase != "" {
+					gomega.Expect(v.Status.Phase).To(gomega.ContainSubstring("Running"))
+				}
+				if v.Status.NodeName != nil && *v.Status.NodeName != "" {
+					gomega.Expect(v.Status.NodeName).To(gomega.ContainSubstring("kind-control-plane"))
+				}
+				if v.Metadata.Namespace != nil && *v.Metadata.Namespace != "" {
+					gomega.Expect(v.Metadata.Namespace).To(gomega.ContainSubstring("default"))
+				}
+				if v.Workload.ApiVersion != nil && *v.Workload.ApiVersion != "" {
+					gomega.Expect(v.Workload.ApiVersion).To(gomega.ContainSubstring("apps/v1"))
+				}
+				if v.Workload.Kind != nil && *v.Workload.Kind != "" {
+					gomega.Expect(v.Workload.Kind).To(gomega.ContainSubstring("Deployment"))
+				}
+			}
 		})
 	})
 }
