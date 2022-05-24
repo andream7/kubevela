@@ -87,6 +87,9 @@ const (
 	// LabelRuntimeNamespaceUsage mark the usage of the namespace in runtime cluster.
 	// A control plane cluster can also be used as runtime cluster
 	LabelRuntimeNamespaceUsage = "usage.oam.dev/runtime"
+
+	// LabelConfigMapNamespace records the configmap name of namespace
+	LabelConfigMapNamespace = "configmap.oam.dev/namespace"
 )
 
 const (

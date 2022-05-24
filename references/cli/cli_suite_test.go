@@ -41,7 +41,6 @@ func TestCli(t *testing.T) {
 }
 
 var cfg *rest.Config
-var k8sClient client.Client
 var testEnv *envtest.Environment
 
 var _ = BeforeSuite(func(done Done) {

@@ -44,6 +44,7 @@ var (
 	appbasicJsonAppFile         = `{"name":"app-basic","services":{"app-basic":{"type":"webservice","image":"nginx:1.9.4","port":80}}}`
 	appbasicAddTraitJsonAppFile = `{"name":"app-basic","services":{"app-basic":{"type":"webservice","image":"nginx:1.9.4","port":80,"scaler":{"replicas":2}}}}`
 	velaQL                      = "component-pod-view{appNs=default,appName=nginx-vela,name=nginx}"
+	view                        = "component-pod-view"
 )
 
 var _ = ginkgo.Describe("Test Vela Application", func() {
@@ -63,6 +64,7 @@ var _ = ginkgo.Describe("Test Vela Application", func() {
 
 	ApplicationInitIntercativeCliContext("test vela init app", appNameForInit, workloadType)
 	e2e.WorkloadDeleteContext("delete", appNameForInit)
+	VelaQLIntercativeCliContext("vela ql", view)
 
 	e2e.JsonAppFileContext("json appfile apply", testDeleteJsonAppFile)
 	ApplicationDeleteWithWaitOptions("test delete with wait option", "test-vela-delete")
@@ -173,6 +175,34 @@ var ApplicationInitIntercativeCliContext = func(context string, appName string, 
 					_, err := c.ExpectString(qa.q)
 					gomega.Expect(err).NotTo(gomega.HaveOccurred())
 					_, err = c.SendLine(qa.a)
+					gomega.Expect(err).NotTo(gomega.HaveOccurred())
+				}
+				c.ExpectEOF()
+			})
+			gomega.Expect(err).NotTo(gomega.HaveOccurred())
+			gomega.Expect(output).To(gomega.ContainSubstring("Checking Status"))
+		})
+	})
+}
+
+var VelaQLIntercativeCliContext = func(context string, view string) bool {
+	return ginkgo.Context(context, func() {
+		ginkgo.FIt("should init app through interactive questions", func() {
+			cli := "vela ql"
+			// {appNs=default,appName=nginx-vela,name=nginx}
+			output, err := e2e.InteractiveExec(cli, func(c *expect.Console) {
+				data := []struct{ a string }{
+					{
+						a: "vela ql",
+					},
+					{
+						a: view + " " + "appNs" + " " + "default" +
+							" " + "appName" + " " + "nginx-vela" +
+							" " + "name" + " " + "nginx",
+					},
+				}
+				for _, qa := range data {
+					_, err := c.SendLine(qa.a)
 					gomega.Expect(err).NotTo(gomega.HaveOccurred())
 				}
 				c.ExpectEOF()
