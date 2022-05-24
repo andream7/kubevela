@@ -3,6 +3,8 @@ kind:       "ConfigMap"
 metadata: 
   name:      "service-applied-resources-view"
   namespace: {{ include "systemDefinitionNamespace" . }}
+  labels:
+      configmap.oam.dev/namespace: "vela-system"
 data:
   template: |
       import (

@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-	http://www.apache.org/licenses/LICENSE-2.0
+   http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -26,7 +26,6 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/rest"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,9 +41,7 @@ func TestCli(t *testing.T) {
 }
 
 var cfg *rest.Config
-var k8sClient client.Client
 var testEnv *envtest.Environment
-var dc *discovery.DiscoveryClient
 
 var _ = BeforeSuite(func(done Done) {
 	rand.Seed(time.Now().UnixNano())
@@ -68,10 +65,6 @@ var _ = BeforeSuite(func(done Done) {
 	k8sClient, err = client.New(cfg, client.Options{Scheme: common.Scheme})
 	Expect(err).Should(BeNil())
 	Expect(k8sClient).ToNot(BeNil())
-
-	dc, err = discovery.NewDiscoveryClientForConfig(cfg)
-	Expect(err).ToNot(HaveOccurred())
-	Expect(dc).ShouldNot(BeNil())
 
 	By("new namespace")
 	err = k8sClient.Create(context.TODO(), &corev1.Namespace{

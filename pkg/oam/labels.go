@@ -96,6 +96,9 @@ const (
 
 	// LabelProject recorde the project the resource belong to
 	LabelProject = "core.oam.dev/project"
+
+	// LabelConfigMapNamespace records the configmap name of namespace
+	LabelConfigMapNamespace = "configmap.oam.dev/namespace"
 )
 
 const (
