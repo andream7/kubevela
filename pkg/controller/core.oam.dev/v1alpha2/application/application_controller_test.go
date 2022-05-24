@@ -32,6 +32,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	v1 "k8s.io/api/apps/v1"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1beta12 "k8s.io/api/networking/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -54,6 +55,7 @@ import (
 	"github.com/oam-dev/kubevela/pkg/oam/util"
 	common2 "github.com/oam-dev/kubevela/pkg/utils/common"
 	"github.com/oam-dev/kubevela/pkg/workflow"
+	"github.com/oam-dev/kubevela/pkg/workflow/debug"
 	"github.com/oam-dev/kubevela/pkg/workflow/tasks/custom"
 )
 
@@ -263,6 +265,31 @@ var _ = Describe("Test Application Controller", func() {
 		},
 	}
 
+	appWithHttpsGateway := &v1beta1.Application{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Application",
+			APIVersion: "core.oam.dev/v1beta1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "app-gateway",
+		},
+		Spec: v1beta1.ApplicationSpec{
+			Components: []common.ApplicationComponent{
+				{
+					Name:       "myworker",
+					Type:       "worker",
+					Properties: &runtime.RawExtension{Raw: []byte("{\"cmd\":[\"sleep\",\"1000\"],\"image\":\"busybox\"}")},
+				},
+			},
+		},
+	}
+	appWithHttpsGateway.Spec.Components[0].Traits = []common.ApplicationTrait{
+		{
+			Type:       "gateway",
+			Properties: &runtime.RawExtension{Raw: []byte(`{"secretName":"myworker-secret","domain":"example.com","http":{"/":80}}`)},
+		},
+	}
+
 	appWithMountPath := &v1beta1.Application{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Application",
@@ -292,6 +319,111 @@ var _ = Describe("Test Application Controller", func() {
 		},
 	}
 
+	appWithControlPlaneOnly := &v1beta1.Application{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Application",
+			APIVersion: "core.oam.dev/v1beta1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "app-controlplaneonly",
+		},
+		Spec: v1beta1.ApplicationSpec{
+			Components: []common.ApplicationComponent{
+				{
+					Name:       "app-controlplaneonly-component",
+					Type:       "worker",
+					Properties: &runtime.RawExtension{Raw: []byte("{\"cmd\":[\"sleep\",\"1000\"],\"image\":\"busybox\"}")},
+				},
+			},
+		},
+	}
+	appWithControlPlaneOnly.Spec.Components[0].Traits = []common.ApplicationTrait{
+		{
+			Type:       "hubcpuscaler",
+			Properties: &runtime.RawExtension{Raw: []byte("{\"min\": 1,\"max\": 10,\"cpuPercent\": 60}")},
+		},
+	}
+
+	appWithHttpsHealthProbe := &v1beta1.Application{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Application",
+			APIVersion: "core.oam.dev/v1beta1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "app-httphealthprobe",
+		},
+		Spec: v1beta1.ApplicationSpec{
+			Components: []common.ApplicationComponent{
+				{
+					Name:       "app-httphealthprobe-component",
+					Type:       "worker",
+					Properties: &runtime.RawExtension{Raw: []byte("{\"cmd\":[\"sleep\",\"1000\"],\"image\":\"busybox\",\"livenessProbe\":{\"failureThreshold\":3,\"httpGet\":{\"path\":\"/v1/health\",\"port\":8080,\"scheme\":\"HTTP\"},\"initialDelaySeconds\":60,\"periodSeconds\":60,\"successThreshold\":1,\"timeoutSeconds\":5}}")},
+				},
+			},
+		},
+	}
+
+	appWithApplyOnce := &v1beta1.Application{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Application",
+			APIVersion: "core.oam.dev/v1beta1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "app-apply-once",
+		},
+		Spec: v1beta1.ApplicationSpec{
+			Components: []common.ApplicationComponent{
+				{
+					Name:       "app-applyonce-component",
+					Type:       "worker",
+					Properties: &runtime.RawExtension{Raw: []byte("{\"cmd\":[\"sleep\",\"1000\"],\"image\":\"busybox\"}")},
+				},
+			},
+			Policies: []v1beta1.AppPolicy{
+				{
+					Name:       "apply-once-01",
+					Type:       "apply-once",
+					Properties: &runtime.RawExtension{Raw: []byte(`{"enable": true,"rules": [{"selector": { "componentNames": ["fourierapp03-comp-01"], "resourceTypes": ["Deployment" ], "strategy": {"path": ["spec.replicas"] } }}]}`)},
+				},
+			},
+		},
+	}
+	appWithApplyOnce.Spec.Components[0].Traits = []common.ApplicationTrait{
+		{
+			Type:       "scaler",
+			Properties: &runtime.RawExtension{Raw: []byte(`{"replicas":2}`)},
+		},
+	}
+
+	appWithMountToEnvs := &v1beta1.Application{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Application",
+			APIVersion: "core.oam.dev/v1beta1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "app-with-mount-to-envs",
+		},
+		Spec: v1beta1.ApplicationSpec{
+			Components: []common.ApplicationComponent{
+				{
+					Name:       "myweb",
+					Type:       "worker",
+					Properties: &runtime.RawExtension{Raw: []byte("{\"cmd\":[\"sleep\",\"1000\"],\"image\":\"busybox\"}")},
+				},
+			},
+		},
+	}
+	appWithMountToEnvs.Spec.Components[0].Traits = []common.ApplicationTrait{
+		{
+			Type:       "storage",
+			Properties: &runtime.RawExtension{Raw: []byte("{\"secret\": [{\"name\": \"myweb-secret\",\"mountToEnv\": {\"envName\": \"firstEnv\",\"secretKey\": \"firstKey\"},\"mountToEnvs\": [{\"envName\": \"secondEnv\",\"secretKey\": \"secondKey\"}],\"data\": {\"firstKey\": \"dmFsdWUwMQo=\",\"secondKey\": \"dmFsdWUwMgo=\"}}]}")},
+		},
+		{
+			Type:       "storage",
+			Properties: &runtime.RawExtension{Raw: []byte("{\"configMap\": [{\"name\": \"myweb-cm\",\"mountToEnvs\": [{\"envName\":\"thirdEnv\",\"configMapKey\":\"thirdKey\"},{\"envName\":\"fourthEnv\",\"configMapKey\":\"fourthKey\"}],\"data\": {\"thirdKey\": \"Value03\",\"fourthKey\": \"Value04\"}}]}")},
+		},
+	}
+
 	cd := &v1beta1.ComponentDefinition{}
 	cDDefJson, _ := yaml.YAMLToJSON([]byte(componentDefYaml))
 	k8sObjectsCDJson, _ := yaml.YAMLToJSON([]byte(k8sObjectsComponentDefinitionYaml))
@@ -304,10 +436,12 @@ var _ = Describe("Test Application Controller", func() {
 	importWdJson, _ := yaml.YAMLToJSON([]byte(wDImportYaml))
 
 	importTd := &v1alpha2.TraitDefinition{}
-
+	importGateway := &v1alpha2.TraitDefinition{}
 	importStorage := &v1alpha2.TraitDefinition{}
 
 	importEnv := &v1alpha2.TraitDefinition{}
+
+	importHubCpuScaler := &v1beta1.TraitDefinition{}
 
 	webserverwd := &v1alpha2.ComponentDefinition{}
 	webserverwdJson, _ := yaml.YAMLToJSON([]byte(webComponentDefYaml))
@@ -340,6 +474,11 @@ var _ = Describe("Test Application Controller", func() {
 		Expect(json.Unmarshal(importTdJson, importTd)).Should(BeNil())
 		Expect(k8sClient.Create(ctx, importTd.DeepCopy())).Should(SatisfyAny(BeNil(), &util.AlreadyExistMatcher{}))
 
+		gatewayJson, gatewayErr := yaml.YAMLToJSON([]byte(gatewayYaml))
+		Expect(gatewayErr).ShouldNot(HaveOccurred())
+		Expect(json.Unmarshal(gatewayJson, importGateway)).Should(BeNil())
+		Expect(k8sClient.Create(ctx, importGateway.DeepCopy())).Should(SatisfyAny(BeNil(), &util.AlreadyExistMatcher{}))
+
 		storageJson, storageErr := yaml.YAMLToJSON([]byte(storageYaml))
 		Expect(storageErr).ShouldNot(HaveOccurred())
 		Expect(json.Unmarshal(storageJson, importStorage)).Should(BeNil())
@@ -349,6 +488,11 @@ var _ = Describe("Test Application Controller", func() {
 		Expect(envErr).ShouldNot(HaveOccurred())
 		Expect(json.Unmarshal(envJson, importEnv)).Should(BeNil())
 		Expect(k8sClient.Create(ctx, importEnv.DeepCopy())).Should(SatisfyAny(BeNil(), &util.AlreadyExistMatcher{}))
+
+		hubCpuScalerJson, hubCpuScalerErr := yaml.YAMLToJSON([]byte(hubCpuScalerYaml))
+		Expect(hubCpuScalerErr).ShouldNot(HaveOccurred())
+		Expect(json.Unmarshal(hubCpuScalerJson, importHubCpuScaler)).Should(BeNil())
+		Expect(k8sClient.Create(ctx, importHubCpuScaler.DeepCopy())).Should(SatisfyAny(BeNil(), &util.AlreadyExistMatcher{}))
 
 		Expect(json.Unmarshal(tDDefJson, td)).Should(BeNil())
 		Expect(k8sClient.Create(ctx, td.DeepCopy())).Should(SatisfyAny(BeNil(), &util.AlreadyExistMatcher{}))
@@ -2568,6 +2712,339 @@ var _ = Describe("Test Application Controller", func() {
 		Expect(k8sClient.Delete(ctx, secret)).Should(BeNil())
 		Expect(k8sClient.Delete(ctx, app)).Should(BeNil())
 	})
+
+	It("test application with trait-gateway support https protocol", func() {
+
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "vela-test-with-trait-gateway-https",
+			},
+		}
+		Expect(k8sClient.Create(ctx, ns)).Should(BeNil())
+
+		appWithHttpsGateway.SetNamespace(ns.Name)
+		app := appWithHttpsGateway.DeepCopy()
+		Expect(k8sClient.Create(ctx, app)).Should(BeNil())
+
+		appKey := client.ObjectKey{
+			Name:      app.Name,
+			Namespace: app.Namespace,
+		}
+		testutil.ReconcileOnceAfterFinalizer(reconciler, reconcile.Request{NamespacedName: appKey})
+
+		By("Check App running successfully")
+		curApp := &v1beta1.Application{}
+		Expect(k8sClient.Get(ctx, appKey, curApp)).Should(BeNil())
+		Expect(curApp.Status.Phase).Should(Equal(common.ApplicationRunning))
+
+		appRevision := &v1beta1.ApplicationRevision{}
+		Expect(k8sClient.Get(ctx, client.ObjectKey{
+			Namespace: app.Namespace,
+			Name:      curApp.Status.LatestRevision.Name,
+		}, appRevision)).Should(BeNil())
+
+		By("Check affiliated resource tracker is created")
+		expectRTName := fmt.Sprintf("%s-%s", appRevision.GetName(), appRevision.GetNamespace())
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{Name: expectRTName}, &v1beta1.ResourceTracker{})
+		}, 10*time.Second, 500*time.Millisecond).Should(Succeed())
+
+		By("Check AppRevision Created with the expected workload spec")
+		appRev := &v1beta1.ApplicationRevision{}
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{Name: app.Name + "-v1", Namespace: app.GetNamespace()}, appRev)
+		}, 10*time.Second, 500*time.Millisecond).Should(Succeed())
+
+		By("Check ingress Created with the expected trait-gateway spec")
+		ingress := &v1beta12.Ingress{}
+		Expect(k8sClient.Get(ctx, client.ObjectKey{
+			Namespace: ns.Name,
+			Name:      app.Spec.Components[0].Name,
+		}, ingress)).Should(BeNil())
+		Expect(len(ingress.Spec.TLS) > 0).Should(BeTrue())
+		Expect(ingress.Spec.TLS[0].SecretName).ShouldNot(BeNil())
+		Expect(ingress.Spec.TLS[0].SecretName).ShouldNot(BeEmpty())
+		Expect(len(ingress.Spec.TLS[0].Hosts) > 0).Should(BeTrue())
+		Expect(ingress.Spec.TLS[0].Hosts[0]).ShouldNot(BeEmpty())
+		Expect(k8sClient.Delete(ctx, ingress)).Should(BeNil())
+		Expect(k8sClient.Delete(ctx, app)).Should(BeNil())
+	})
+
+	It("test application with multi-mountToEnv will create application", func() {
+
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "app-with-mount-to-envs",
+			},
+		}
+		Expect(k8sClient.Create(ctx, ns)).Should(BeNil())
+
+		appWithMountToEnvs.SetNamespace(ns.Name)
+		app := appWithMountToEnvs.DeepCopy()
+		Expect(k8sClient.Create(ctx, app)).Should(BeNil())
+
+		appKey := client.ObjectKey{
+			Name:      app.Name,
+			Namespace: app.Namespace,
+		}
+		testutil.ReconcileOnceAfterFinalizer(reconciler, reconcile.Request{NamespacedName: appKey})
+
+		By("Check App running successfully")
+		curApp := &v1beta1.Application{}
+		Expect(k8sClient.Get(ctx, appKey, curApp)).Should(BeNil())
+		Expect(curApp.Status.Phase).Should(Equal(common.ApplicationRunning))
+
+		appRevision := &v1beta1.ApplicationRevision{}
+		Expect(k8sClient.Get(ctx, client.ObjectKey{
+			Namespace: app.Namespace,
+			Name:      curApp.Status.LatestRevision.Name,
+		}, appRevision)).Should(BeNil())
+		By("Check affiliated resource tracker is created")
+		expectRTName := fmt.Sprintf("%s-%s", appRevision.GetName(), appRevision.GetNamespace())
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{Name: expectRTName}, &v1beta1.ResourceTracker{})
+		}, 10*time.Second, 500*time.Millisecond).Should(Succeed())
+
+		By("Check AppRevision Created with the expected workload spec")
+		appRev := &v1beta1.ApplicationRevision{}
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{Name: app.Name + "-v1", Namespace: app.GetNamespace()}, appRev)
+		}, 10*time.Second, 500*time.Millisecond).Should(Succeed())
+
+		By("Check secret Created with the expected trait-storage spec")
+		secret := &corev1.Secret{}
+		Expect(k8sClient.Get(ctx, client.ObjectKey{
+			Namespace: ns.Name,
+			Name:      app.Spec.Components[0].Name + "-secret",
+		}, secret)).Should(BeNil())
+
+		By("Check configMap Created with the expected trait-storage spec")
+		cm := &corev1.ConfigMap{}
+		Expect(k8sClient.Get(ctx, client.ObjectKey{
+			Namespace: ns.Name,
+			Name:      app.Spec.Components[0].Name + "-cm",
+		}, cm)).Should(BeNil())
+
+		Expect(k8sClient.Delete(ctx, cm)).Should(BeNil())
+		Expect(k8sClient.Delete(ctx, secret)).Should(BeNil())
+		Expect(k8sClient.Delete(ctx, app)).Should(BeNil())
+	})
+
+	It("app with debug policy", func() {
+		app := &v1beta1.Application{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "Application",
+				APIVersion: "core.oam.dev/v1beta1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "app-debug",
+				Namespace: "default",
+			},
+			Spec: v1beta1.ApplicationSpec{
+				Components: []common.ApplicationComponent{
+					{
+						Name:       "myworker",
+						Type:       "worker",
+						Properties: &runtime.RawExtension{Raw: []byte("{\"cmd\":[\"sleep\",\"1000\"],\"image\":\"busybox\",\"env\":[{\"name\":\"firstKey\",\"value\":\"firstValue\"}]}")},
+					},
+				},
+				Policies: []v1beta1.AppPolicy{
+					{
+						Type: "debug",
+						Name: "debug",
+					},
+				},
+			},
+		}
+		Expect(k8sClient.Create(ctx, app)).Should(BeNil())
+
+		appKey := client.ObjectKey{
+			Name:      app.Name,
+			Namespace: app.Namespace,
+		}
+		testutil.ReconcileOnceAfterFinalizer(reconciler, reconcile.Request{NamespacedName: appKey})
+
+		By("Check App running successfully")
+		curApp := &v1beta1.Application{}
+		Expect(k8sClient.Get(ctx, appKey, curApp)).Should(BeNil())
+		Expect(curApp.Status.Phase).Should(Equal(common.ApplicationRunning))
+
+		By("Check debug Config Map is created")
+		debugCM := &corev1.ConfigMap{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{
+			Name:      debug.GenerateContextName(app.Name, "myworker"),
+			Namespace: "default",
+		}, debugCM)).Should(BeNil())
+
+		By("Update the application to update the debug Config Map")
+		app.Spec.Components[0].Properties = &runtime.RawExtension{Raw: []byte("{\"cmd\":[\"sleep\",\"1000\"],\"image\":\"busybox\",\"env\":[{\"name\":\"firstKey\",\"value\":\"updateValue\"}]}")}
+		testutil.ReconcileOnce(reconciler, reconcile.Request{NamespacedName: appKey})
+		updatedCM := &corev1.ConfigMap{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{
+			Name:      debug.GenerateContextName(app.Name, "myworker"),
+			Namespace: "default",
+		}, updatedCM)).Should(BeNil())
+
+		Expect(k8sClient.Delete(ctx, app)).Should(BeNil())
+	})
+
+	It("test application with controlPlaneOnly trait ", func() {
+
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "vela-test-with-controlplaneonly",
+			},
+		}
+		Expect(k8sClient.Create(ctx, ns)).Should(BeNil())
+
+		appWithControlPlaneOnly.SetNamespace(ns.Name)
+		app := appWithControlPlaneOnly.DeepCopy()
+		Expect(k8sClient.Create(ctx, app)).Should(BeNil())
+
+		appKey := client.ObjectKey{
+			Name:      app.Name,
+			Namespace: app.Namespace,
+		}
+		testutil.ReconcileOnceAfterFinalizer(reconciler, reconcile.Request{NamespacedName: appKey})
+
+		By("Check App running successfully")
+		curApp := &v1beta1.Application{}
+		Expect(k8sClient.Get(ctx, appKey, curApp)).Should(BeNil())
+		Expect(curApp.Status.Phase).Should(Equal(common.ApplicationRunning))
+
+		appRevision := &v1beta1.ApplicationRevision{}
+		Expect(k8sClient.Get(ctx, client.ObjectKey{
+			Namespace: app.Namespace,
+			Name:      curApp.Status.LatestRevision.Name,
+		}, appRevision)).Should(BeNil())
+
+		By("Check affiliated resource tracker is created")
+		expectRTName := fmt.Sprintf("%s-%s", appRevision.GetName(), appRevision.GetNamespace())
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{Name: expectRTName}, &v1beta1.ResourceTracker{})
+		}, 10*time.Second, 500*time.Millisecond).Should(Succeed())
+
+		By("Check AppRevision Created with the expected workload spec")
+		appRev := &v1beta1.ApplicationRevision{}
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{Name: app.Name + "-v1", Namespace: app.GetNamespace()}, appRev)
+		}, 10*time.Second, 500*time.Millisecond).Should(Succeed())
+
+		By("Check secret Created with the expected trait-storage spec")
+		hpa := &autoscalingv1.HorizontalPodAutoscaler{}
+		Expect(k8sClient.Get(ctx, client.ObjectKey{
+			Namespace: app.GetNamespace(),
+			Name:      app.Spec.Components[0].Name,
+		}, hpa)).Should(BeNil())
+
+		Expect(k8sClient.Delete(ctx, cm)).Should(BeNil())
+		Expect(k8sClient.Delete(ctx, hpa)).Should(BeNil())
+		Expect(k8sClient.Delete(ctx, app)).Should(BeNil())
+	})
+
+	It("test application with apply-once policy ", func() {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "vela-test-with-apply-once",
+			},
+		}
+		Expect(k8sClient.Create(ctx, ns)).Should(BeNil())
+		appWithApplyOnce.SetNamespace(ns.Name)
+		app := appWithApplyOnce.DeepCopy()
+		Expect(k8sClient.Create(ctx, app)).Should(BeNil())
+
+		appKey := client.ObjectKey{
+			Name:      app.Name,
+			Namespace: app.Namespace,
+		}
+		testutil.ReconcileOnceAfterFinalizer(reconciler, reconcile.Request{NamespacedName: appKey})
+
+		By("Check App running successfully")
+		curApp := &v1beta1.Application{}
+		Expect(k8sClient.Get(ctx, appKey, curApp)).Should(BeNil())
+		Expect(curApp.Status.Phase).Should(Equal(common.ApplicationRunning))
+
+		appRevision := &v1beta1.ApplicationRevision{}
+		Expect(k8sClient.Get(ctx, client.ObjectKey{
+			Namespace: app.Namespace,
+			Name:      curApp.Status.LatestRevision.Name,
+		}, appRevision)).Should(BeNil())
+
+		By("Check affiliated resource tracker is created")
+		expectRTName := fmt.Sprintf("%s-%s", appRevision.GetName(), appRevision.GetNamespace())
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{Name: expectRTName}, &v1beta1.ResourceTracker{})
+		}, 10*time.Second, 500*time.Millisecond).Should(Succeed())
+
+		By("Check AppRevision Created with the expected workload spec")
+		appRev := &v1beta1.ApplicationRevision{}
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{Name: app.Name + "-v1", Namespace: app.GetNamespace()}, appRev)
+		}, 10*time.Second, 500*time.Millisecond).Should(Succeed())
+
+		By("Check secret Created with the expected trait-storage spec")
+		deployment := &v1.Deployment{}
+		Expect(k8sClient.Get(ctx, client.ObjectKey{
+			Namespace: app.GetNamespace(),
+			Name:      app.Spec.Components[0].Name,
+		}, deployment)).Should(BeNil())
+		targetReplicas := int32(5)
+		deployment.Spec.Replicas = &targetReplicas
+		Expect(k8sClient.Update(ctx, deployment)).Should(BeNil())
+
+		newDeployment := &v1.Deployment{}
+		Expect(k8sClient.Get(ctx, client.ObjectKey{
+			Namespace: app.GetNamespace(),
+			Name:      app.Spec.Components[0].Name,
+		}, newDeployment)).Should(BeNil())
+		Expect(*newDeployment.Spec.Replicas).Should(Equal(targetReplicas))
+		Expect(k8sClient.Delete(ctx, newDeployment)).Should(BeNil())
+		Expect(k8sClient.Delete(ctx, app)).Should(BeNil())
+	})
+
+	It("test application with healthProbe which use https", func() {
+		ns := &corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "vela-test-with-httpshealthprobe",
+			},
+		}
+		Expect(k8sClient.Create(ctx, ns)).Should(BeNil())
+
+		appWithHttpsHealthProbe.SetNamespace(ns.Name)
+		app := appWithHttpsHealthProbe.DeepCopy()
+		Expect(k8sClient.Create(ctx, app)).Should(BeNil())
+
+		appKey := client.ObjectKey{
+			Name:      app.Name,
+			Namespace: app.Namespace,
+		}
+		testutil.ReconcileOnceAfterFinalizer(reconciler, reconcile.Request{NamespacedName: appKey})
+
+		By("Check App running successfully")
+		curApp := &v1beta1.Application{}
+		Expect(k8sClient.Get(ctx, appKey, curApp)).Should(BeNil())
+		Expect(curApp.Status.Phase).Should(Equal(common.ApplicationRunning))
+
+		appRevision := &v1beta1.ApplicationRevision{}
+		Expect(k8sClient.Get(ctx, client.ObjectKey{
+			Namespace: app.Namespace,
+			Name:      curApp.Status.LatestRevision.Name,
+		}, appRevision)).Should(BeNil())
+
+		By("Check affiliated resource tracker is created")
+		expectRTName := fmt.Sprintf("%s-%s", appRevision.GetName(), appRevision.GetNamespace())
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{Name: expectRTName}, &v1beta1.ResourceTracker{})
+		}, 10*time.Second, 500*time.Millisecond).Should(Succeed())
+
+		By("Check AppRevision Created with the expected workload spec")
+		appRev := &v1beta1.ApplicationRevision{}
+		Eventually(func() error {
+			return k8sClient.Get(ctx, client.ObjectKey{Name: app.Name + "-v1", Namespace: app.GetNamespace()}, appRev)
+		}, 10*time.Second, 500*time.Millisecond).Should(Succeed())
+
+		Expect(k8sClient.Delete(ctx, app)).Should(BeNil())
+	})
 })
 
 const (
@@ -2991,6 +3468,106 @@ spec:
           image: string
           cmd?: [...string]
       }
+`
+	gatewayYaml = `apiVersion: core.oam.dev/v1beta1
+kind: TraitDefinition
+metadata:
+  annotations:
+    definition.oam.dev/description: Enable public web traffic for the component, the ingress API matches K8s v1.20+.
+  name: gateway
+  namespace: vela-system
+spec:
+  appliesToWorkloads:
+    - '*'
+  podDisruptive: false
+  schematic:
+    cue:
+      template: |
+        // trait template can have multiple outputs in one trait
+        outputs: service: {
+        	apiVersion: "v1"
+        	kind:       "Service"
+        	metadata: name: context.name
+        	spec: {
+        		selector: "app.oam.dev/component": context.name
+        		ports: [
+        			for k, v in parameter.http {
+        				port:       v
+        				targetPort: v
+        			},
+        		]
+        	}
+        }
+        outputs: ingress: {
+        	apiVersion: "networking.k8s.io/v1"
+        	kind:       "Ingress"
+        	metadata: {
+        		name: context.name
+        		annotations: {
+        			if !parameter.classInSpec {
+        				"kubernetes.io/ingress.class": parameter.class
+        			}
+        		}
+        	}
+        	spec: {
+        		if parameter.classInSpec {
+        			ingressClassName: parameter.class
+        		}
+        		if parameter.secretName != _|_ {
+        			tls: [{
+        				hosts: [
+        					parameter.domain,
+        				]
+        				secretName: parameter.secretName
+        			}]
+        		}
+        		rules: [{
+        			host: parameter.domain
+        			http: paths: [
+        				for k, v in parameter.http {
+        					path:     k
+        					pathType: "ImplementationSpecific"
+        					backend: service: {
+        						name: context.name
+        						port: number: v
+        					}
+        				},
+        			]
+        		}]
+        	}
+        }
+        parameter: {
+        	// +usage=Specify the domain you want to expose
+        	domain: string
+
+        	// +usage=Specify the mapping relationship between the http path and the workload port
+        	http: [string]: int
+
+        	// +usage=Specify the class of ingress to use
+        	class: *"nginx" | string
+
+        	// +usage=Set ingress class in '.spec.ingressClassName' instead of 'kubernetes.io/ingress.class' annotation.
+        	classInSpec: *false | bool
+
+        	// +usage=Specify the secret name you want to quote.
+        	secretName?: string
+        }
+  status:
+    customStatus: |-
+      let igs = context.outputs.ingress.status.loadBalancer.ingress
+      if igs == _|_ {
+        message: "No loadBalancer found, visiting by using 'vela port-forward " + context.appName + "'\n"
+      }
+      if len(igs) > 0 {
+        if igs[0].ip != _|_ {
+      	  message: "Visiting URL: " + context.outputs.ingress.spec.rules[0].host + ", IP: " + igs[0].ip
+        }
+        if igs[0].ip == _|_ {
+      	  message: "Visiting URL: " + context.outputs.ingress.spec.rules[0].host
+        }
+      }
+    healthPolicy: 'isHealth: len(context.outputs.service.spec.clusterIP) > 0'
+
 `
 	cdDefWithHealthStatusYaml = `apiVersion: core.oam.dev/v1beta1
 kind: ComponentDefinition
@@ -3604,6 +4181,17 @@ spec:
         		}
         	},
         ] | []
+        configMapMountToEnvsList: *[
+        			for v in parameter.configMap if v.mountToEnvs != _|_ for k in v.mountToEnvs {
+        		{
+        			name: k.envName
+        			valueFrom: configMapKeyRef: {
+        				name: v.name
+        				key:  k.configMapKey
+        			}
+        		}
+        	},
+        ] | []
         secretVolumeMountsList: *[
         			for v in parameter.secret if v.mountPath != _|_ {
         		{
@@ -3619,6 +4207,17 @@ spec:
         			valueFrom: secretKeyRef: {
         				name: v.name
         				key:  v.mountToEnv.secretKey
+        			}
+        		}
+        	},
+        ] | []
+        secretMountToEnvsList: *[
+        			for v in parameter.secret if v.mountToEnvs != _|_ for k in v.mountToEnvs {
+        		{
+        			name: k.envName
+        			valueFrom: secretKeyRef: {
+        				name: v.name
+        				key:  k.secretKey
         			}
         		}
         	},
@@ -3645,7 +4244,7 @@ spec:
 
         	containers: [{
         		// +patchKey=name
-        		env: configMapEnvMountsList + secretEnvMountsList
+        		env: configMapEnvMountsList + secretEnvMountsList + configMapMountToEnvsList + secretMountToEnvsList
         		// +patchKey=name
         		volumeDevices: volumeDevicesList
         		// +patchKey=name
@@ -3765,6 +4364,10 @@ spec:
         			envName:      string
         			configMapKey: string
         		}
+        		mountToEnvs?: [...{
+        			envName:      string
+        			configMapKey: string
+        		}]
         		mountPath?:   string
         		defaultMode: *420 | int
         		readOnly:    *false | bool
@@ -3784,6 +4387,10 @@ spec:
         			envName:   string
         			secretKey: string
         		}
+        		mountToEnvs?: [...{
+        			envName:   string
+        			secretKey: string
+        		}]
         		mountPath?:   string
         		defaultMode: *420 | int
         		readOnly:    *false | bool
@@ -3897,12 +4504,57 @@ spec:
         		}]
         	}
         }
-        parameter: #PatchParams | close({
+        parameter: *#PatchParams | close({
         	// +usage=Specify the environment variables for multiple containers
         	containers: [...#PatchParams]
         })
         errs: [ for c in patch.spec.template.spec.containers if c.err != _|_ {c.err}]
 
+`
+
+	hubCpuScalerYaml = `apiVersion: core.oam.dev/v1beta1
+kind: TraitDefinition
+metadata:
+  annotations:
+    definition.oam.dev/description: Automatically scale the component based on CPU usage.
+  labels:
+    custom.definition.oam.dev/ui-hidden: "true"
+  name: hubcpuscaler
+  namespace: vela-system
+spec:
+  appliesToWorkloads:
+    - deployments.apps
+  controlPlaneOnly: true
+  schematic:
+    cue:
+      template: |
+        outputs: hubcpuscaler: {
+        	apiVersion: "autoscaling/v1"
+        	kind:       "HorizontalPodAutoscaler"
+        	metadata: name: context.name
+        	spec: {
+        		scaleTargetRef: {
+        			apiVersion: parameter.targetAPIVersion
+        			kind:       parameter.targetKind
+        			name:       context.name
+        		}
+        		minReplicas:                    parameter.min
+        		maxReplicas:                    parameter.max
+        		targetCPUUtilizationPercentage: parameter.cpuUtil
+        	}
+        }
+        parameter: {
+        	// +usage=Specify the minimal number of replicas to which the autoscaler can scale down
+        	min: *1 | int
+        	// +usage=Specify the maximum number of of replicas to which the autoscaler can scale up
+        	max: *10 | int
+        	// +usage=Specify the average CPU utilization, for example, 50 means the CPU usage is 50%
+        	cpuUtil: *50 | int
+        	// +usage=Specify the apiVersion of scale target
+        	targetAPIVersion: *"apps/v1" | string
+        	// +usage=Specify the kind of scale target
+        	targetKind: *"Deployment" | string
+        }
 `
 )
 

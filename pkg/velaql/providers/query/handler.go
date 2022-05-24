@@ -32,6 +32,7 @@ import (
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -80,6 +81,9 @@ type Option struct {
 	Name      string       `json:"name"`
 	Namespace string       `json:"namespace"`
 	Filter    FilterOption `json:"filter,omitempty"`
+	// WithStatus means query the object from the cluster and get the latest status
+	// This field only suitable for ListResourcesInApp
+	WithStatus bool `json:"withStatus,omitempty"`
 }
 
 // FilterOption filter resource created by component
@@ -87,9 +91,11 @@ type FilterOption struct {
 	Cluster          string   `json:"cluster,omitempty"`
 	ClusterNamespace string   `json:"clusterNamespace,omitempty"`
 	Components       []string `json:"components,omitempty"`
+	APIVersion       string   `json:"apiVersion,omitempty"`
+	Kind             string   `json:"kind,omitempty"`
 }
 
-// ListResourcesInApp lists CRs created by Application
+// ListResourcesInApp lists CRs created by Application, this provider queries the object data.
 func (h *provider) ListResourcesInApp(ctx wfContext.Context, v *value.Value, act types.Action) error {
 	val, err := v.LookupValue("app")
 	if err != nil {
@@ -107,7 +113,7 @@ func (h *provider) ListResourcesInApp(ctx wfContext.Context, v *value.Value, act
 	return v.FillObject(appResList, "list")
 }
 
-// ListAppliedResources list applied resource from tracker
+// ListAppliedResources list applied resource from tracker, this provider only queries the metadata.
 func (h *provider) ListAppliedResources(ctx wfContext.Context, v *value.Value, act types.Action) error {
 	val, err := v.LookupValue("app")
 	if err != nil {
@@ -126,6 +132,53 @@ func (h *provider) ListAppliedResources(ctx wfContext.Context, v *value.Value, a
 	appResList, err := collector.ListApplicationResources(app)
 	if err != nil {
 		return v.FillObject(err.Error(), "err")
+	}
+	return v.FillObject(appResList, "list")
+}
+
+// ListAppliedResources list applied resource from tracker
+func (h *provider) GetApplicationResourceTree(ctx wfContext.Context, v *value.Value, act types.Action) error {
+	val, err := v.LookupValue("app")
+	if err != nil {
+		return err
+	}
+	opt := Option{}
+	if err = val.UnmarshalTo(&opt); err != nil {
+		return err
+	}
+	collector := NewAppCollector(h.cli, opt)
+	app := new(v1beta1.Application)
+	appKey := client.ObjectKey{Name: opt.Name, Namespace: opt.Namespace}
+	if err := h.cli.Get(context.Background(), appKey, app); err != nil {
+		return v.FillObject(err.Error(), "err")
+	}
+	appResList, err := collector.ListApplicationResources(app)
+	if err != nil {
+		return v.FillObject(err.Error(), "err")
+	}
+	for _, resource := range appResList {
+		root := querytypes.ResourceTreeNode{
+			APIVersion: resource.APIVersion,
+			Kind:       resource.Kind,
+			Cluster:    resource.Cluster,
+			Namespace:  resource.Namespace,
+			Name:       resource.Name,
+			UID:        resource.UID,
+		}
+		root.LeafNodes, err = iteratorChildResources(context.Background(), resource.Cluster, h.cli, root, 1)
+		if err != nil {
+			return v.FillObject(err.Error(), "err")
+		}
+		rootObject, err := fetchObjectWithResourceTreeNode(context.Background(), resource.Cluster, h.cli, root)
+		if err != nil {
+			return v.FillObject(err.Error(), "err")
+		}
+		rootStatus, err := checkResourceStatus(*rootObject)
+		if err != nil {
+			return v.FillObject(err.Error(), "err")
+		}
+		root.HealthStatus = *rootStatus
+		resource.ResourceTree = root
 	}
 	return v.FillObject(appResList, "list")
 }
@@ -275,14 +328,17 @@ func (h *provider) GeneratorServiceEndpoints(wfctx wfContext.Context, v *value.V
 			for _, service := range services {
 				serviceEndpoints = append(serviceEndpoints, generatorFromService(service, selectorNodeIP, cluster, resource.Component, "")...)
 			}
-
-			// only support network/v1beta1
 			ingress, err := hc.CollectIngress(ctx, resource.Cluster)
 			if err != nil {
 				klog.Error(err, "collect ingres by helm release failure", "helmRelease", resource.Name, "namespace", resource.Namespace, "cluster", resource.Cluster)
 			}
-			for _, ing := range ingress {
-				serviceEndpoints = append(serviceEndpoints, generatorFromIngress(ing, cluster, resource.Component)...)
+			for _, uns := range ingress {
+				var ingress networkv1beta1.Ingress
+				if err := runtime.DefaultUnstructuredConverter.FromUnstructured(uns.UnstructuredContent(), &ingress); err != nil {
+					klog.Errorf("fail to convert unstructured to ingress %s", err.Error())
+					continue
+				}
+				serviceEndpoints = append(serviceEndpoints, generatorFromIngress(ingress, cluster, resource.Component)...)
 			}
 		case "SeldonDeployment":
 			obj := new(unstructured.Unstructured)
@@ -417,6 +473,7 @@ func Install(p providers.Providers, cli client.Client, cfg *rest.Config) {
 		"searchEvents":            prd.SearchEvents,
 		"collectLogsInPod":        prd.CollectLogsInPod,
 		"collectServiceEndpoints": prd.GeneratorServiceEndpoints,
+		"getApplicationTree":      prd.GetApplicationResourceTree,
 	})
 }
 

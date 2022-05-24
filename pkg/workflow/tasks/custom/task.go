@@ -84,7 +84,7 @@ func (t *TaskLoader) GetTaskGenerator(ctx context.Context, name string) (wfTypes
 
 type taskRunner struct {
 	name         string
-	run          func(ctx wfContext.Context, options *wfTypes.TaskRunOptions) (common.WorkflowStepStatus, *wfTypes.Operation, error)
+	run          func(ctx wfContext.Context, options *wfTypes.TaskRunOptions) (common.StepStatus, *wfTypes.Operation, error)
 	checkPending func(ctx wfContext.Context) bool
 }
 
@@ -94,7 +94,7 @@ func (tr *taskRunner) Name() string {
 }
 
 // Run execute task.
-func (tr *taskRunner) Run(ctx wfContext.Context, options *wfTypes.TaskRunOptions) (common.WorkflowStepStatus, *wfTypes.Operation, error) {
+func (tr *taskRunner) Run(ctx wfContext.Context, options *wfTypes.TaskRunOptions) (common.StepStatus, *wfTypes.Operation, error) {
 	return tr.run(ctx, options)
 }
 
@@ -108,7 +108,7 @@ func (t *TaskLoader) makeTaskGenerator(templ string) (wfTypes.TaskGenerator, err
 
 		exec := &executor{
 			handlers: t.handlers,
-			wfStatus: common.WorkflowStepStatus{
+			wfStatus: common.StepStatus{
 				Name:  wfStep.Name,
 				Type:  wfStep.Type,
 				Phase: common.WorkflowStepPhaseSucceeded,
@@ -154,7 +154,7 @@ func (t *TaskLoader) makeTaskGenerator(templ string) (wfTypes.TaskGenerator, err
 			}
 			return false
 		}
-		tRunner.run = func(ctx wfContext.Context, options *wfTypes.TaskRunOptions) (common.WorkflowStepStatus, *wfTypes.Operation, error) {
+		tRunner.run = func(ctx wfContext.Context, options *wfTypes.TaskRunOptions) (common.StepStatus, *wfTypes.Operation, error) {
 			if options.GetTracer == nil {
 				options.GetTracer = func(id string, step v1beta1.WorkflowStep) monitorContext.Context {
 					return monitorContext.NewTraceContext(context.Background(), "")
@@ -177,13 +177,13 @@ func (t *TaskLoader) makeTaskGenerator(templ string) (wfTypes.TaskGenerator, err
 			paramsValue, err := ctx.MakeParameter(params)
 			if err != nil {
 				tracer.Error(err, "make parameter")
-				return common.WorkflowStepStatus{}, nil, errors.WithMessage(err, "make parameter")
+				return common.StepStatus{}, nil, errors.WithMessage(err, "make parameter")
 			}
 
 			for _, hook := range options.PreStartHooks {
 				if err := hook(ctx, paramsValue, wfStep); err != nil {
 					tracer.Error(err, "do preStartHook")
-					return common.WorkflowStepStatus{}, nil, errors.WithMessage(err, "do preStartHook")
+					return common.StepStatus{}, nil, errors.WithMessage(err, "do preStartHook")
 				}
 			}
 
@@ -196,7 +196,7 @@ func (t *TaskLoader) makeTaskGenerator(templ string) (wfTypes.TaskGenerator, err
 			if params != nil {
 				ps, err := paramsValue.String()
 				if err != nil {
-					return common.WorkflowStepStatus{}, nil, errors.WithMessage(err, "params encode")
+					return common.StepStatus{}, nil, errors.WithMessage(err, "params encode")
 				}
 				paramFile = fmt.Sprintf(model.ParameterFieldName+": {%s}\n", ps)
 			}
@@ -208,9 +208,16 @@ func (t *TaskLoader) makeTaskGenerator(templ string) (wfTypes.TaskGenerator, err
 			}
 
 			exec.tracer = tracer
-			if isDebugMode(taskv) {
+			if debugLog(taskv) {
 				exec.printStep("workflowStepStart", "workflow", "", taskv)
 				defer exec.printStep("workflowStepEnd", "workflow", "", taskv)
+			}
+			if options.Debug != nil {
+				defer func() {
+					if err := options.Debug(exec.wfStatus.Name, taskv); err != nil {
+						tracer.Error(err, "failed to debug")
+					}
+				}()
 			}
 			if err := exec.doSteps(ctx, taskv); err != nil {
 				tracer.Error(err, "do steps")
@@ -249,7 +256,7 @@ func (t *TaskLoader) makeValue(ctx wfContext.Context, templ string, id string, p
 type executor struct {
 	handlers providers.Providers
 
-	wfStatus           common.WorkflowStepStatus
+	wfStatus           common.StepStatus
 	suspend            bool
 	terminated         bool
 	failedAfterRetries bool
@@ -307,7 +314,7 @@ func (exec *executor) operation() *wfTypes.Operation {
 	}
 }
 
-func (exec *executor) status() common.WorkflowStepStatus {
+func (exec *executor) status() common.StepStatus {
 	return exec.wfStatus
 }
 
@@ -318,7 +325,7 @@ func (exec *executor) printStep(phase string, provider string, do string, v *val
 
 // Handle process task-step value by provider and do.
 func (exec *executor) Handle(ctx wfContext.Context, provider string, do string, v *value.Value) error {
-	if isDebugMode(v) {
+	if debugLog(v) {
 		exec.printStep("stepStart", provider, do, v)
 		defer exec.printStep("stepEnd", provider, do, v)
 	}
@@ -330,7 +337,7 @@ func (exec *executor) Handle(ctx wfContext.Context, provider string, do string, 
 }
 
 func (exec *executor) doSteps(ctx wfContext.Context, v *value.Value) error {
-	do := opTpy(v)
+	do := OpTpy(v)
 	if do != "" && do != "steps" {
 		provider := opProvider(v)
 		if err := exec.Handle(ctx, provider, do, v); err != nil {
@@ -356,14 +363,14 @@ func (exec *executor) doSteps(ctx wfContext.Context, v *value.Value) error {
 
 		if isStepList(fieldName) {
 			return false, in.StepByList(func(name string, item *value.Value) (bool, error) {
-				do := opTpy(item)
+				do := OpTpy(item)
 				if do == "" {
 					return false, nil
 				}
 				return false, exec.doSteps(ctx, item)
 			})
 		}
-		do := opTpy(in)
+		do := OpTpy(in)
 		if do == "" {
 			return false, nil
 		}
@@ -392,12 +399,13 @@ func isStepList(fieldName string) bool {
 	return strings.HasPrefix(fieldName, "#up_")
 }
 
-func isDebugMode(v *value.Value) bool {
+func debugLog(v *value.Value) bool {
 	debug, _ := v.CueValue().LookupDef("#debug").Bool()
 	return debug
 }
 
-func opTpy(v *value.Value) string {
+// OpTpy get label do
+func OpTpy(v *value.Value) string {
 	return getLabel(v, "#do")
 }
 

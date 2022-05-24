@@ -21,24 +21,25 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/oam-dev/cluster-gateway/pkg/apis/cluster/v1alpha1"
-	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	types2 "k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	types2 "k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/yaml"
+
+	"github.com/oam-dev/cluster-gateway/pkg/apis/cluster/v1alpha1"
+	clustercommon "github.com/oam-dev/cluster-gateway/pkg/common"
 
 	"github.com/oam-dev/kubevela/apis/core.oam.dev/common"
 	v1alpha12 "github.com/oam-dev/kubevela/apis/core.oam.dev/v1alpha1"
 	"github.com/oam-dev/kubevela/apis/core.oam.dev/v1beta1"
 	"github.com/oam-dev/kubevela/apis/types"
 	"github.com/oam-dev/kubevela/pkg/oam/util"
+	"github.com/oam-dev/kubevela/pkg/utils/apply"
 )
 
 var _ = Describe("Addon test", func() {
@@ -280,9 +281,9 @@ var _ = Describe("Test render addon with specified clusters", func() {
 				Name:      "add-c1",
 				Namespace: "vela-system",
 				Labels: map[string]string{
-					v1alpha1.LabelKeyClusterCredentialType: string(v1alpha1.CredentialTypeX509Certificate),
-					v1alpha1.LabelKeyClusterEndpointType:   v1alpha1.ClusterEndpointTypeConst,
-					"key":                                  "value",
+					clustercommon.LabelKeyClusterCredentialType: string(v1alpha1.CredentialTypeX509Certificate),
+					clustercommon.LabelKeyClusterEndpointType:   string(v1alpha1.ClusterEndpointTypeConst),
+					"key": "value",
 				},
 			},
 		})).Should(SatisfyAny(BeNil(), &util.AlreadyExistMatcher{}))
@@ -291,9 +292,9 @@ var _ = Describe("Test render addon with specified clusters", func() {
 				Name:      "add-c2",
 				Namespace: "vela-system",
 				Labels: map[string]string{
-					v1alpha1.LabelKeyClusterCredentialType: string(v1alpha1.CredentialTypeX509Certificate),
-					v1alpha1.LabelKeyClusterEndpointType:   v1alpha1.ClusterEndpointTypeConst,
-					"key":                                  "value",
+					clustercommon.LabelKeyClusterCredentialType: string(v1alpha1.CredentialTypeX509Certificate),
+					clustercommon.LabelKeyClusterEndpointType:   string(v1alpha1.ClusterEndpointTypeConst),
+					"key": "value",
 				},
 			},
 		})).Should(SatisfyAny(BeNil(), &util.AlreadyExistMatcher{}))
@@ -319,7 +320,61 @@ var _ = Describe("Test render addon with specified clusters", func() {
 		Expect(err).Should(BeNil())
 		Expect(ap.Spec.Policies).Should(BeEquivalentTo([]v1beta1.AppPolicy{{Name: "specified-addon-clusters",
 			Type:       v1alpha12.TopologyPolicyType,
-			Properties: &runtime.RawExtension{Raw: []byte(`{"clusters":["add-c1","add-c2"]}`)}}}))
+			Properties: &runtime.RawExtension{Raw: []byte(`{"clusters":["add-c1","add-c2","local"]}`)}}}))
+	})
+})
+
+var _ = Describe("func addon update ", func() {
+	It("test update addon app label", func() {
+		app_test_update := v1beta1.Application{}
+		Expect(yaml.Unmarshal([]byte(addonUpdateAppYaml), &app_test_update)).Should(BeNil())
+		Expect(k8sClient.Create(ctx, &app_test_update)).Should(BeNil())
+
+		Eventually(func() error {
+			var err error
+			appCheck := v1beta1.Application{}
+			err = k8sClient.Get(ctx, types2.NamespacedName{Namespace: "vela-system", Name: "addon-test-update"}, &appCheck)
+			if err != nil {
+				return err
+			}
+			if appCheck.Labels["addons.oam.dev/version"] != "v1.2.0" {
+				return fmt.Errorf("label missmatch")
+			}
+			return nil
+		}, time.Millisecond*500, 30*time.Second).Should(BeNil())
+
+		pkg := &InstallPackage{Meta: Meta{Name: "test-update", Version: "1.3.0"}}
+		h := NewAddonInstaller(context.Background(), k8sClient, nil, nil, nil, &Registry{Name: "test"}, nil, nil)
+		h.addon = pkg
+		Expect(h.dispatchAddonResource(pkg)).Should(BeNil())
+
+		Eventually(func() error {
+			var err error
+			appCheck := v1beta1.Application{}
+			err = k8sClient.Get(context.Background(), types2.NamespacedName{Namespace: "vela-system", Name: "addon-test-update"}, &appCheck)
+			if err != nil {
+				return err
+			}
+			if appCheck.Labels["addons.oam.dev/version"] != "1.3.0" {
+				return fmt.Errorf("label missmatch")
+			}
+			return nil
+		}, time.Second*3, 300*time.Second).Should(BeNil())
+	})
+})
+
+var _ = Describe("test enable addon in local dir", func() {
+	BeforeEach(func() {
+		app := v1beta1.Application{ObjectMeta: metav1.ObjectMeta{Namespace: "vela-system", Name: "addon-example"}}
+		Expect(k8sClient.Delete(ctx, &app)).Should(SatisfyAny(BeNil(), util.NotFoundMatcher{}))
+	})
+
+	It("test enable addon by local dir", func() {
+		ctx := context.Background()
+		err := EnableAddonByLocalDir(ctx, "example", "./testdata/example", k8sClient, dc, apply.NewAPIApplicator(k8sClient), cfg, map[string]interface{}{"example": "test"})
+		Expect(err).Should(BeNil())
+		app := v1beta1.Application{}
+		Expect(k8sClient.Get(ctx, types2.NamespacedName{Namespace: "vela-system", Name: "addon-example"}, &app)).Should(BeNil())
 	})
 })
 
@@ -400,4 +455,21 @@ spec:
       schedulerName: default-scheduler
       securityContext: {}
       terminationGracePeriodSeconds: 30`
+
+	addonUpdateAppYaml = `
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: addon-test-update
+  namespace: vela-system
+  labels:
+    addons.oam.dev/version: v1.2.0
+spec:
+  components:
+    - name: express-server
+      type: webservice
+      properties:
+        image: crccheck/hello-world
+        port: 8000
+`
 )

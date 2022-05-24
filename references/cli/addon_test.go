@@ -18,11 +18,20 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 	"testing"
+
+	"github.com/fatih/color"
+
+	pkgaddon "github.com/oam-dev/kubevela/pkg/addon"
+
+	"github.com/getkin/kin-openapi/openapi3"
 
 	"github.com/oam-dev/kubevela/pkg/utils/common"
 	"github.com/oam-dev/kubevela/pkg/utils/util"
 
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
 	"gotest.tools/assert"
 )
 
@@ -66,12 +75,16 @@ func TestParseMap(t *testing.T) {
 			nilError: true,
 		},
 		{
-			args: []string{"clusters={c1, c2, c3}", "image.tag=1.1"},
+			args: []string{"local=true"},
 			res: map[string]interface{}{
-				"clusters": []string{"c1", "c2", "c3"},
-				"image": map[string]interface{}{
-					"tag": "1.1",
-				},
+				"local": true,
+			},
+			nilError: true,
+		},
+		{
+			args: []string{"replicas=3"},
+			res: map[string]interface{}{
+				"replicas": int64(3),
 			},
 			nilError: true,
 		},
@@ -113,6 +126,40 @@ func TestAddonEnableCmdWithErrLocalPath(t *testing.T) {
 	}
 }
 
+var _ = Describe("Test AddonRegistry Cmd", func() {
+	It("Test AddonRegistryAddCmd", func() {
+		testAddonRegistryAddCmd()
+	})
+})
+
+func testAddonRegistryAddCmd() {
+	testcase := []struct {
+		args   []string
+		errMsg string
+	}{
+		{
+			args:   []string{"noAuthRegistry", "--type=helm", "--endpoint=http://127.0.0.1/chartrepo/oam"},
+			errMsg: "fail to add no auth addon registry",
+		},
+		{
+			args:   []string{"basicAuthRegistry", "--type=helm", "--endpoint=http://127.0.0.1/chartrepo/oam", "--username=hello", "--password=word"},
+			errMsg: "fail to add basis auth addon registry",
+		},
+	}
+
+	ioStream := util.IOStreams{}
+	commandArgs := common.Args{}
+	commandArgs.SetClient(k8sClient)
+
+	cmd := NewAddAddonRegistryCommand(commandArgs, ioStream)
+
+	for _, s := range testcase {
+		cmd.SetArgs(s.args)
+		err := cmd.Execute()
+		Expect(err).Should(BeNil(), s.errMsg)
+	}
+}
+
 func TestAddonUpgradeCmdWithErrLocalPath(t *testing.T) {
 	testcase := []struct {
 		args   []string
@@ -136,5 +183,235 @@ func TestAddonUpgradeCmdWithErrLocalPath(t *testing.T) {
 		cmd.SetArgs(s.args)
 		err := cmd.Execute()
 		assert.Error(t, err, s.errMsg)
+	}
+}
+
+func TestTransCluster(t *testing.T) {
+	testcase := []struct {
+		str string
+		res []string
+	}{
+		{
+			str: "{cluster1, cluster2}",
+			res: []string{"cluster1", "cluster2"},
+		},
+		{
+			str: "{cluster1,cluster2}",
+			res: []string{"cluster1", "cluster2"},
+		},
+		{
+			str: "{cluster1,  cluster2   }",
+			res: []string{"cluster1", "cluster2"},
+		},
+	}
+	for _, s := range testcase {
+		assert.DeepEqual(t, transClusters(s.str), s.res)
+	}
+}
+
+func TestGenerateAvailableVersions(t *testing.T) {
+	type testcase struct {
+		inVersion string
+		versions  []string
+	}
+	testcases := []struct {
+		c   testcase
+		res string
+	}{
+		{
+			c: testcase{
+				inVersion: "1.2.1",
+				versions:  []string{"1.2.1"},
+			},
+			res: fmt.Sprintf("[%s]", color.New(color.Bold, color.FgGreen).Sprintf("1.2.1")),
+		},
+		{
+			c: testcase{
+				inVersion: "1.2.1",
+				versions:  []string{"1.2.3", "1.2.2", "1.2.1"},
+			},
+			res: fmt.Sprintf("[%s, 1.2.3, 1.2.2]", color.New(color.Bold, color.FgGreen).Sprintf("1.2.1")),
+		},
+		{
+			c: testcase{
+				inVersion: "1.2.1",
+				versions:  []string{"1.2.3", "1.2.2", "1.2.1", "1.2.0"},
+			},
+			res: fmt.Sprintf("[%s, 1.2.3, 1.2.2, ...]", color.New(color.Bold, color.FgGreen).Sprintf("1.2.1")),
+		},
+	}
+	for _, s := range testcases {
+		re := genAvailableVersionInfo(s.c.versions, s.c.inVersion, 3)
+		assert.Equal(t, re, s.res)
+	}
+}
+
+func TestLimitStringLength(t *testing.T) {
+	type testcase struct {
+		testString  string
+		lengthLimit int
+	}
+
+	testcases := []struct {
+		c   testcase
+		res string
+	}{
+		// len = limit
+		{
+			c: testcase{
+				testString:  "4444",
+				lengthLimit: 4,
+			},
+			res: "4444",
+		},
+		// len > limit
+		{
+			c: testcase{
+				testString:  "3333",
+				lengthLimit: 3,
+			},
+			res: "333...",
+		},
+		// len < limit
+		{
+			c: testcase{
+				testString:  "22",
+				lengthLimit: 3,
+			},
+			res: "22",
+		},
+		// limit = 0
+		{
+			c: testcase{
+				testString:  "000",
+				lengthLimit: 0,
+			},
+			res: "000",
+		},
+		// limit < 0
+		{
+			c: testcase{
+				testString:  "000",
+				lengthLimit: -1,
+			},
+			res: "000",
+		},
+	}
+
+	for _, s := range testcases {
+		re := limitStringLength(s.c.testString, s.c.lengthLimit)
+		assert.Equal(t, re, s.res)
+	}
+}
+
+func TestAddonPackageCmdWithInvalidArgs(t *testing.T) {
+	testcase := []struct {
+		args []string
+		msg  string
+	}{
+		{
+			args: []string{},
+			msg:  "must specify addon directory path",
+		},
+		{
+			args: []string{"./a_local_path"},
+			msg:  "fail to package",
+		},
+		{
+			args: []string{"a_local_path/"},
+			msg:  "fail to package",
+		},
+	}
+
+	commandArgs := common.Args{}
+	cmd := NewAddonPackageCommand(commandArgs)
+
+	for _, s := range testcase {
+		cmd.SetArgs(s.args)
+		err := cmd.Execute()
+		assert.ErrorContains(t, err, s.msg)
+	}
+}
+
+func TestPackageValidAddon(t *testing.T) {
+	commandArgs := common.Args{}
+	cmd := NewAddonPackageCommand(commandArgs)
+	cmd.SetArgs([]string{"./test-data/addon/sample"})
+	err := cmd.Execute()
+	assert.NilError(t, err)
+}
+
+func TestGenerateParameterString(t *testing.T) {
+	testcase := []struct {
+		status       pkgaddon.Status
+		addonPackage *pkgaddon.WholeAddonPackage
+		outputs      []string
+	}{
+		{
+			status: pkgaddon.Status{},
+			addonPackage: &pkgaddon.WholeAddonPackage{
+				APISchema: nil,
+			},
+			outputs: []string{""},
+		},
+		{
+			status: pkgaddon.Status{
+				Parameters: map[string]interface{}{
+					"database": "kubevela",
+					"dbType":   "kubeapi",
+				},
+			},
+			addonPackage: &pkgaddon.WholeAddonPackage{
+				APISchema: &openapi3.Schema{
+					Required: []string{"dbType", "serviceAccountName", "serviceType", "dex"},
+					Properties: openapi3.Schemas{
+						"database": &openapi3.SchemaRef{
+							Value: &openapi3.Schema{
+								Description: "Specify the database name, for the kubeapi db type, it represents namespace.",
+								Default:     nil,
+							},
+						},
+						"dbURL": &openapi3.SchemaRef{
+							Value: &openapi3.Schema{
+								Description: "Specify the MongoDB URL. it only enabled where DB type is MongoDB.",
+								Default:     nil,
+							},
+						},
+						"dbType": &openapi3.SchemaRef{
+							Value: &openapi3.Schema{
+								Description: "Specify the database type, current support KubeAPI(default) and MongoDB.",
+								Default:     "kubeapi",
+							},
+						},
+					},
+				},
+			},
+			outputs: []string{
+				// dbType
+				color.New(color.FgCyan).Sprintf("-> ") +
+					color.New(color.Bold).Sprint("dbType") + ": " +
+					"Specify the database type, current support KubeAPI(default) and MongoDB.\n" +
+					"\tcurrent: " + color.New(color.FgGreen).Sprint("\"kubeapi\"\n") +
+					"\tdefault: " + "\"kubeapi\"\n" +
+					"\trequired: " + color.GreenString("✔\n"),
+				// dbURL
+				color.New(color.FgCyan).Sprintf("-> ") +
+					color.New(color.Bold).Sprint("dbURL") + ": " +
+					"Specify the MongoDB URL. it only enabled where DB type is MongoDB.",
+				// database
+				color.New(color.FgCyan).Sprintf("-> ") +
+					color.New(color.Bold).Sprint("database") + ": " +
+					"Specify the database name, for the kubeapi db type, it represents namespace.\n" +
+					"\tcurrent: " + color.New(color.FgGreen).Sprint("\"kubevela\""),
+			},
+		},
+	}
+
+	for _, s := range testcase {
+		res := generateParameterString(s.status, s.addonPackage)
+		for _, o := range s.outputs {
+			assert.Check(t, strings.Contains(res, o))
+		}
+
 	}
 }

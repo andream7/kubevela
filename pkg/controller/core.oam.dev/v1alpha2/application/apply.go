@@ -21,9 +21,11 @@ import (
 	"sync"
 
 	terraformtypes "github.com/oam-dev/terraform-controller/api/types"
-	terraformapi "github.com/oam-dev/terraform-controller/api/v1beta1"
+	terraforv1beta1 "github.com/oam-dev/terraform-controller/api/v1beta1"
+	terraforv1beta2 "github.com/oam-dev/terraform-controller/api/v1beta2"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -32,11 +34,10 @@ import (
 	"github.com/oam-dev/kubevela/apis/core.oam.dev/v1beta1"
 	"github.com/oam-dev/kubevela/apis/types"
 	"github.com/oam-dev/kubevela/pkg/appfile"
-	"github.com/oam-dev/kubevela/pkg/oam"
-
 	monitorContext "github.com/oam-dev/kubevela/pkg/monitor/context"
 	"github.com/oam-dev/kubevela/pkg/monitor/metrics"
 	"github.com/oam-dev/kubevela/pkg/multicluster"
+	"github.com/oam-dev/kubevela/pkg/oam"
 	"github.com/oam-dev/kubevela/pkg/resourcekeeper"
 )
 
@@ -82,12 +83,15 @@ func NewAppHandler(ctx context.Context, r *Reconciler, app *v1beta1.Application,
 // Dispatch apply manifests into k8s.
 func (h *AppHandler) Dispatch(ctx context.Context, cluster string, owner common.ResourceCreatorRole, manifests ...*unstructured.Unstructured) error {
 	manifests = multicluster.ResourcesWithClusterName(cluster, manifests...)
-	if err := h.resourceKeeper.Dispatch(ctx, manifests); err != nil {
+	if err := h.resourceKeeper.Dispatch(ctx, manifests, nil); err != nil {
 		return err
 	}
 	for _, mf := range manifests {
 		if mf == nil {
 			continue
+		}
+		if oam.GetCluster(mf) != "" {
+			cluster = oam.GetCluster(mf)
 		}
 		ref := common.ClusterObjectReference{
 			Cluster: cluster,
@@ -209,6 +213,7 @@ func (h *AppHandler) ProduceArtifacts(ctx context.Context, comps []*types.Compon
 	return h.createResourcesConfigMap(ctx, h.currentAppRev, comps, policies)
 }
 
+// nolint
 func (h *AppHandler) collectHealthStatus(ctx context.Context, wl *appfile.Workload, appRev *v1beta1.ApplicationRevision, overrideNamespace string) (*common.ApplicationComponentStatus, bool, error) {
 	namespace := h.app.Namespace
 	if overrideNamespace != "" {
@@ -229,34 +234,22 @@ func (h *AppHandler) collectHealthStatus(ctx context.Context, wl *appfile.Worklo
 	)
 
 	if wl.CapabilityCategory == types.TerraformCategory {
-		var configuration terraformapi.Configuration
+		var configuration terraforv1beta2.Configuration
 		if err := h.r.Client.Get(ctx, client.ObjectKey{Name: wl.Name, Namespace: namespace}, &configuration); err != nil {
-			return nil, false, errors.WithMessagef(err, "app=%s, comp=%s, check health error", appName, wl.Name)
-		}
-
-		isLatest := func() bool {
-			if configuration.Status.ObservedGeneration != 0 {
-				if configuration.Status.ObservedGeneration != configuration.Generation {
-					return false
+			if kerrors.IsNotFound(err) {
+				var legacyConfiguration terraforv1beta1.Configuration
+				if err := h.r.Client.Get(ctx, client.ObjectKey{Name: wl.Name, Namespace: namespace}, &legacyConfiguration); err != nil {
+					return nil, false, errors.WithMessagef(err, "app=%s, comp=%s, check health error", appName, wl.Name)
 				}
+				isHealth = setStatus(&status, legacyConfiguration.Status.ObservedGeneration, legacyConfiguration.Generation,
+					legacyConfiguration.GetLabels(), appRev.Name, legacyConfiguration.Status.Apply.State, legacyConfiguration.Status.Apply.Message)
+			} else {
+				return nil, false, errors.WithMessagef(err, "app=%s, comp=%s, check health error", appName, wl.Name)
 			}
-			// Use AppRevision to avoid getting the configuration before the patch.
-			if v, ok := configuration.GetLabels()[oam.LabelAppRevision]; ok {
-				if v != appRev.Name {
-					return false
-				}
-			}
-
-			return true
-		}
-		if !isLatest() || configuration.Status.Apply.State != terraformtypes.Available {
-			status.Healthy = false
-			isHealth = false
 		} else {
-			status.Healthy = true
-			isHealth = true
+			isHealth = setStatus(&status, configuration.Status.ObservedGeneration, configuration.Generation, configuration.GetLabels(),
+				appRev.Name, configuration.Status.Apply.State, configuration.Status.Apply.Message)
 		}
-		status.Message = configuration.Status.Apply.Message
 	} else {
 		if ok, err := wl.EvalHealth(wl.Ctx, h.r.Client, namespace); !ok || err != nil {
 			isHealth = false
@@ -290,6 +283,29 @@ func (h *AppHandler) collectHealthStatus(ctx context.Context, wl *appfile.Worklo
 	status.Scopes = generateScopeReference(wl.Scopes)
 	h.addServiceStatus(true, status)
 	return &status, isHealth, nil
+}
+
+func setStatus(status *common.ApplicationComponentStatus, observedGeneration, generation int64, labels map[string]string,
+	appRevName string, state terraformtypes.ConfigurationState, message string) bool {
+	isLatest := func() bool {
+		if observedGeneration != 0 && observedGeneration != generation {
+			return false
+		}
+		// Use AppRevision to avoid getting the configuration before the patch.
+		if v, ok := labels[oam.LabelAppRevision]; ok {
+			if v != appRevName {
+				return false
+			}
+		}
+		return true
+	}
+	if !isLatest() || state != terraformtypes.Available {
+		status.Healthy = false
+		return false
+	}
+	status.Healthy = true
+	status.Message = message
+	return true
 }
 
 func generateScopeReference(scopes []appfile.Scope) []corev1.ObjectReference {

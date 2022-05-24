@@ -20,10 +20,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
+
+	"github.com/oam-dev/kubevela/pkg/utils/common"
 
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	"github.com/getkin/kin-openapi/openapi3"
@@ -190,22 +194,22 @@ func TestWalkParameterSchema(t *testing.T) {
 			data: `{
     "properties": {
         "cmd": {
-            "description": "Commands to run in the container", 
+            "description": "Commands to run in the container",
             "items": {
                 "type": "string"
-            }, 
-            "title": "cmd", 
+            },
+            "title": "cmd",
             "type": "array"
-        }, 
+        },
         "image": {
-            "description": "Which image would you like to use for your service", 
-            "title": "image", 
+            "description": "Which image would you like to use for your service",
+            "title": "image",
             "type": "string"
         }
-    }, 
+    },
     "required": [
         "image"
-    ], 
+    ],
     "type": "object"
 }`,
 			ExpectRefs: map[string]map[string]ReferenceParameter{
@@ -232,25 +236,25 @@ func TestWalkParameterSchema(t *testing.T) {
 		},
 		{
 			data: `{
-    "properties": { 
+    "properties": {
         "obj": {
             "properties": {
                 "f0": {
-                    "default": "v0", 
+                    "default": "v0",
                     "type": "string"
-                }, 
+                },
                 "f1": {
-                    "default": "v1", 
+                    "default": "v1",
                     "type": "string"
-                }, 
+                },
                 "f2": {
-                    "default": "v2", 
+                    "default": "v2",
                     "type": "string"
                 }
-            }, 
+            },
             "type": "object"
         },
-    }, 
+    },
     "type": "object"
 }`,
 			ExpectRefs: map[string]map[string]ReferenceParameter{
@@ -297,23 +301,23 @@ func TestWalkParameterSchema(t *testing.T) {
         "obj": {
             "properties": {
                 "f0": {
-                    "default": "v0", 
+                    "default": "v0",
                     "type": "string"
-                }, 
+                },
                 "f1": {
-                    "default": "v1", 
-                    "type": "object", 
+                    "default": "v1",
+                    "type": "object",
                     "properties": {
                         "g0": {
-                            "default": "v2", 
+                            "default": "v2",
                             "type": "string"
                         }
                     }
                 }
-            }, 
+            },
             "type": "object"
         }
-    }, 
+    },
     "type": "object"
 }`,
 			ExpectRefs: map[string]map[string]ReferenceParameter{
@@ -360,7 +364,7 @@ func TestWalkParameterSchema(t *testing.T) {
 	for _, cases := range testcases {
 		commonRefs = make([]CommonReference, 0)
 		parameterJSON := fmt.Sprintf(BaseOpenAPIV3Template, cases.data)
-		swagger, err := openapi3.NewSwaggerLoader().LoadSwaggerFromData(json.RawMessage(parameterJSON))
+		swagger, err := openapi3.NewLoader().LoadFromData(json.RawMessage(parameterJSON))
 		assert.Equal(t, nil, err)
 		parameters := swagger.Components.Schemas["parameter"].Value
 		WalkParameterSchema(parameters, "Properties", 0)
@@ -598,7 +602,7 @@ func TestParseLocalFile(t *testing.T) {
 			localFilePath: "testdata/terraform-aws-elb.yaml",
 			want: types.Capability{
 				Name:                   "aws-elb",
-				Description:            "Terraform module which creates ELB resources on",
+				Description:            "Terraform module which creates ELB resources on AWS",
 				TerraformConfiguration: "https://github.com/terraform-aws-modules/terraform-aws-elb.git",
 				ConfigurationType:      "remote",
 				Path:                   "",
@@ -609,7 +613,7 @@ func TestParseLocalFile(t *testing.T) {
 			want: types.Capability{
 				Name:                   "azure-database-mariadb",
 				Description:            "Terraform configuration for Azure Database Mariadb",
-				TerraformConfiguration: "|\n        # Configure the Microsoft Azure Provider\n        provider \"azurerm\" {\n          features {}\n        }\n\n        resource \"azurerm_resource_group\" \"example\" {\n          name = var.resource_group\n          location = var.location\n        }\n\n        resource \"azurerm_mariadb_server\" \"example\" {\n          name = var.server_name\n          location = var.location\n          resource_group_name = azurerm_resource_group.example.name\n\n          sku_name = \"B_Gen5_2\"\n\n          storage_mb = 51200\n          backup_retention_days = 7\n          geo_redundant_backup_enabled = false\n\n          administrator_login = var.username\n          administrator_login_password = var.password\n          version = \"10.2\"\n          ssl_enforcement_enabled = true\n        }\n\n        resource \"azurerm_mariadb_database\" \"example\" {\n          name = var.db_name\n          resource_group_name = azurerm_resource_group.example.name\n          server_name = azurerm_mariadb_server.example.name\n          charset = \"utf8\"\n          collation = \"utf8_general_ci\"\n        }\n\n        variable \"server_name\" {\n          type = string\n          description = \"mariadb server name\"\n          default = \"mariadb-svr-sample\"\n        }\n\n        variable \"db_name\" {\n          default = \"backend\"\n          type = string\n          description = \"Database instance name\"\n        }\n\n        variable \"username\" {\n          default = \"acctestun\"\n          type = string\n          description = \"Database instance username\"\n        }\n\n        variable \"password\" {\n          default = \"H@Sh1CoR3!faked\"\n          type = string\n          description = \"Database instance password\"\n        }\n\n        variable \"location\" {\n          description = \"Azure location\"\n          type = string\n          default = \"West Europe\"\n        }\n\n        variable \"resource_group\" {\n          description = \"Resource group\"\n          type = string\n          default = \"kubevela-group\"\n        }\n\n        output \"SERVER_NAME\" {\n          value = var.server_name\n          description = \"mariadb server name\"\n        }\n\n        output \"DB_NAME\" {\n          value = var.db_name\n          description = \"Database instance name\"\n        }\n        output \"DB_USER\" {\n          value = var.username\n          description = \"Database instance username\"\n        }\n        output \"DB_PASSWORD\" {\n          sensitive = true\n          value = var.password\n          description = \"Database instance password\"\n        }\n        output \"DB_PORT\" {\n          value = \"3306\"\n          description = \"Database instance port\"\n        }\n        output \"DB_HOST\" {\n          value = azurerm_mariadb_server.example.fqdn\n          description = \"Database instance host\"\n        }",
+				TerraformConfiguration: "",
 				ConfigurationType:      "",
 				Path:                   "",
 			},
@@ -619,7 +623,7 @@ func TestParseLocalFile(t *testing.T) {
 			want: types.Capability{
 				Name:                   "baidu-vpc",
 				Description:            "Baidu Cloud VPC",
-				TerraformConfiguration: "|-\n        terraform {\n          required_providers {\n            baiducloud = {\n              source = \"baidubce/baiducloud\"\n              version = \"1.12.0\"\n            }\n          }\n        }\n\n        resource \"baiducloud_vpc\" \"default\" {\n          name        = var.name\n          description = var.description\n          cidr        = var.cidr\n        }\n\n        variable \"name\" {\n          default = \"terraform-vpc\"\n          description = \"The name of the VPC\"\n          type = string\n        }\n\n        variable \"description\" {\n          description = \"The description of the VPC\"\n          default = \"this is created by terraform\"\n          type = string\n        }\n\n        variable \"cidr\" {\n          description = \"The CIDR of the VPC\"\n          default = \"192.168.0.0/24\"\n          type = string\n        }\n\n        output \"vpcs\" {\n          value = baiducloud_vpc.default.id\n        }",
+				TerraformConfiguration: "",
 				ConfigurationType:      "",
 				Path:                   "",
 			},
@@ -639,7 +643,7 @@ func TestParseLocalFile(t *testing.T) {
 			want: types.Capability{
 				Name:                   "tencent-subnet",
 				Description:            "Tencent Cloud Subnet",
-				TerraformConfiguration: "|\n        terraform {\n          required_providers {\n            tencentcloud = {\n              source = \"tencentcloudstack/tencentcloud\"\n            }\n          }\n        }\n\n        variable \"availability_zone\" {\n          description = \"Availability Zone\"\n          default = \"ap-beijing-1\"\n          type = string\n        }\n\n        resource \"tencentcloud_vpc\" \"foo\" {\n          name       = \"guagua-ci-temp-test\"\n          cidr_block = \"10.0.0.0/16\"\n        }\n\n        resource \"tencentcloud_subnet\" \"subnet\" {\n          availability_zone = var.availability_zone\n          name              = var.name\n          vpc_id            = tencentcloud_vpc.foo.id\n          cidr_block        = var.cidr_block\n          is_multicast      = var.is_multicast\n        }\n\n        variable \"name\" {\n          description = \"Subnet name\"\n          default = \"guagua-ci-temp-test\"\n          type = string\n        }\n\n        variable \"cidr_block\" {\n          description = \"Subnet CIDR block\"\n          default = \"10.0.20.0/28\"\n          type = string\n        }\n\n        variable \"is_multicast\" {\n          description = \"Subnet is multicast\"\n          default = false\n          type = bool\n        }\n\n        output \"SUBNET_ID\" {\n          description = \"Subnet ID\"\n          value = tencentcloud_subnet.subnet.id\n        }",
+				TerraformConfiguration: "",
 				ConfigurationType:      "",
 				Path:                   "",
 			},
@@ -651,9 +655,56 @@ func TestParseLocalFile(t *testing.T) {
 			if err != nil {
 				t.Errorf("ParseLocalFile(...): -want: %v, got error: %s\n", tc.want, err)
 			}
-			if reflect.DeepEqual(*lc, tc.want) {
-				t.Errorf("ParseLocalFile(...): -want: %v, got: %v\n", tc.want, *lc)
+			if !reflect.DeepEqual(*lc, tc.want) {
+				if !reflect.DeepEqual(lc.Name, tc.want.Name) {
+					t.Errorf("Name not equal, - got: %v - want: %v", lc.Name, tc.want.Name)
+				}
+				if !reflect.DeepEqual(lc.Description, tc.want.Description) {
+					t.Errorf("Description not equal, - got: %v - want: %v", lc.Description, tc.want.Description)
+				}
+				if !reflect.DeepEqual(lc.TerraformConfiguration, tc.want.TerraformConfiguration) {
+					if len(lc.TerraformConfiguration) == 0 {
+						t.Errorf("Parse TerraformConfiguration failed")
+					}
+				}
+				if !reflect.DeepEqual(lc.ConfigurationType, tc.want.ConfigurationType) {
+					t.Errorf("ConfigurationType not equal, - got: %v - want: %v", lc.ConfigurationType, tc.want.ConfigurationType)
+				}
+				if !reflect.DeepEqual(lc.Path, tc.want.Path) {
+					t.Errorf("Path not equal, - got: %v - want: %v", lc.Path, tc.want.Path)
+				}
 			}
 		})
 	}
+}
+
+func TestExtractParameter(t *testing.T) {
+	ref := &ConsoleReference{}
+	cueTemplate := `
+parameter: {
+	// +usage=The mapping of environment variables to secret
+	envMappings: [string]: #KeySecret
+}
+#KeySecret: {
+	key?:   string
+	secret: string
+}
+`
+	oldStdout := os.Stdout
+	defer func() {
+		os.Stdout = oldStdout
+	}()
+
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	cueValue, _ := common.GetCUEParameterValue(cueTemplate, nil)
+	defaultDepth := 0
+	defaultDisplay := "console"
+	displayFormat = &defaultDisplay
+	ref.parseParameters(cueValue, "Properties", defaultDepth)
+	assert.Equal(t, 1, len(propertyConsole))
+	propertyConsole[0].TableObject.Render()
+	w.Close()
+	out, _ := ioutil.ReadAll(r)
+	assert.True(t, strings.Contains(string(out), "map[string]#KeySecret"))
 }

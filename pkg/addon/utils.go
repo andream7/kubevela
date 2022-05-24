@@ -32,6 +32,7 @@ import (
 	"github.com/oam-dev/kubevela/pkg/definition"
 	"github.com/oam-dev/kubevela/pkg/oam"
 	"github.com/oam-dev/kubevela/pkg/oam/util"
+	"github.com/oam-dev/kubevela/pkg/utils/common"
 )
 
 const (
@@ -153,18 +154,31 @@ func findLegacyAddonDefs(ctx context.Context, k8sClient client.Client, addonName
 	var defObjects []*unstructured.Unstructured
 	for i, registry := range registries {
 		if registry.Name == registryName {
-			installer := NewAddonInstaller(ctx, k8sClient, nil, nil, config, &registries[i], nil, nil)
-			metas, err := installer.getAddonMeta()
-			if err != nil {
-				return err
+			var uiData *UIData
+			if !IsVersionRegistry(registry) {
+				installer := NewAddonInstaller(ctx, k8sClient, nil, nil, config, &registries[i], nil, nil)
+				metas, err := installer.getAddonMeta()
+				if err != nil {
+					return err
+				}
+				meta := metas[addonName]
+				// only fetch definition files from registry.
+				uiData, err = registry.GetUIData(&meta, UnInstallOptions)
+				if err != nil {
+					return errors.Wrapf(err, "cannot fetch addon difinition files from registry")
+				}
+			} else {
+				versionedRegistry := BuildVersionedRegistry(registry.Name, registry.Helm.URL, &common.HTTPOption{
+					Username: registry.Helm.Username,
+					Password: registry.Helm.Password,
+				})
+				uiData, err = versionedRegistry.GetAddonUIData(ctx, addonName, "")
+				if err != nil {
+					return errors.Wrapf(err, "cannot fetch addon difinition files from registry")
+				}
 			}
-			meta := metas[addonName]
-			// only fetch definition files from registry.
-			data, err := registry.GetUIData(&meta, UnInstallOptions)
-			if err != nil {
-				return errors.Wrapf(err, "cannot fetch addon difinition files from registry")
-			}
-			for _, defYaml := range data.Definitions {
+
+			for _, defYaml := range uiData.Definitions {
 				def, err := renderObject(defYaml)
 				if err != nil {
 					// don't let one error defined definition block whole disable process
@@ -172,7 +186,7 @@ func findLegacyAddonDefs(ctx context.Context, k8sClient client.Client, addonName
 				}
 				defObjects = append(defObjects, def)
 			}
-			for _, cueDef := range data.CUEDefinitions {
+			for _, cueDef := range uiData.CUEDefinitions {
 				def := definition.Definition{Unstructured: unstructured.Unstructured{}}
 				err := def.FromCUEString(cueDef.Data, config)
 				if err != nil {
@@ -208,4 +222,9 @@ func usingAppsInfo(apps []v1beta1.Application) string {
 	}
 	res = strings.TrimSuffix(res, ",") + ".Please delete them before disabling the addon."
 	return res
+}
+
+// IsVersionRegistry  check the repo source if support multi-version addon
+func IsVersionRegistry(r Registry) bool {
+	return r.Helm != nil
 }

@@ -18,13 +18,18 @@ package utils
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 
+	authv1 "k8s.io/api/authentication/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/oam-dev/kubevela/pkg/oam/util"
 	velaerr "github.com/oam-dev/kubevela/pkg/utils/errors"
@@ -105,4 +110,66 @@ func UpdateNamespace(ctx context.Context, kubeClient client.Client, name string,
 		}
 	}
 	return kubeClient.Update(ctx, &namespace)
+}
+
+// GetServiceAccountSubjectFromConfig extract ServiceAccountName subject from token
+func GetServiceAccountSubjectFromConfig(cfg *rest.Config) string {
+	sub, _ := GetTokenSubject(cfg.BearerToken)
+	return sub
+}
+
+// GetCertificateCommonNameAndOrganizationsFromConfig extract CommonName and Organizations from Certificate
+func GetCertificateCommonNameAndOrganizationsFromConfig(cfg *rest.Config) (string, []string) {
+	cert := cfg.CertData
+	if len(cert) == 0 && cfg.CertFile != "" {
+		cert, _ = ioutil.ReadFile(cfg.CertFile)
+	}
+	name, _ := GetCertificateSubject(cert)
+	if name == nil {
+		return "", nil
+	}
+	return name.CommonName, name.Organization
+}
+
+// GetUserInfoFromConfig extract UserInfo from KubeConfig
+func GetUserInfoFromConfig(cfg *rest.Config) *authv1.UserInfo {
+	if sub := GetServiceAccountSubjectFromConfig(cfg); sub != "" {
+		return &authv1.UserInfo{Username: sub}
+	}
+	if cn, orgs := GetCertificateCommonNameAndOrganizationsFromConfig(cfg); cn != "" {
+		return &authv1.UserInfo{Username: cn, Groups: orgs}
+	}
+	return nil
+}
+
+// AutoSetSelfImpersonationInConfig set impersonate username and group to the identity in the original rest config
+func AutoSetSelfImpersonationInConfig(cfg *rest.Config) {
+	if userInfo := GetUserInfoFromConfig(cfg); userInfo != nil {
+		cfg.Impersonate.UserName = userInfo.Username
+		cfg.Impersonate.Groups = append(cfg.Impersonate.Groups, userInfo.Groups...)
+	}
+}
+
+// CreateOrUpdate create or update a kubernetes object
+func CreateOrUpdate(ctx context.Context, cli client.Client, obj client.Object) (controllerutil.OperationResult, error) {
+	bs, err := json.Marshal(obj)
+	if err != nil {
+		return controllerutil.OperationResultNone, err
+	}
+	return controllerutil.CreateOrUpdate(ctx, cli, obj, func() error {
+		createTimestamp := obj.GetCreationTimestamp()
+		resourceVersion := obj.GetResourceVersion()
+		deletionTimestamp := obj.GetDeletionTimestamp()
+		generation := obj.GetGeneration()
+		managedFields := obj.GetManagedFields()
+		if e := json.Unmarshal(bs, obj); err != nil {
+			return e
+		}
+		obj.SetCreationTimestamp(createTimestamp)
+		obj.SetResourceVersion(resourceVersion)
+		obj.SetDeletionTimestamp(deletionTimestamp)
+		obj.SetGeneration(generation)
+		obj.SetManagedFields(managedFields)
+		return nil
+	})
 }

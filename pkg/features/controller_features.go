@@ -23,12 +23,32 @@ import (
 )
 
 const (
-	// DeprecatedPolicySpecCompatible enable the use of deprecated policy spec
-	DeprecatedPolicySpecCompatible featuregate.Feature = "DeprecatedPolicySpecCompatible"
+	// Compatibility Features
+
+	// DeprecatedPolicySpec enable the use of deprecated policy spec
+	DeprecatedPolicySpec featuregate.Feature = "DeprecatedPolicySpec"
+	// LegacyObjectTypeIdentifier enable the use of legacy object type identifier for selecting ref-object
+	LegacyObjectTypeIdentifier featuregate.Feature = "LegacyObjectTypeIdentifier"
+	// DeprecatedObjectLabelSelector enable the use of deprecated object label selector for selecting ref-object
+	DeprecatedObjectLabelSelector featuregate.Feature = "DeprecatedObjectLabelSelector"
+	// LegacyResourceTrackerGC enable the gc of legacy resource tracker in managed clusters
+	LegacyResourceTrackerGC featuregate.Feature = "LegacyResourceTrackerGC"
+
+	// Edge Features
+
+	// ControllerAutoImpersonation enable the auto impersonation for controller (to use explicit identity for requests)
+	ControllerAutoImpersonation featuregate.Feature = "ControllerAutoImpersonation"
+	// AuthenticateApplication enable the authentication for application
+	AuthenticateApplication featuregate.Feature = "AuthenticateApplication"
 )
 
 var defaultFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-	DeprecatedPolicySpecCompatible: {Default: false, PreRelease: featuregate.Alpha},
+	DeprecatedPolicySpec:          {Default: false, PreRelease: featuregate.Alpha},
+	LegacyObjectTypeIdentifier:    {Default: false, PreRelease: featuregate.Alpha},
+	DeprecatedObjectLabelSelector: {Default: false, PreRelease: featuregate.Alpha},
+	LegacyResourceTrackerGC:       {Default: true, PreRelease: featuregate.Alpha},
+	ControllerAutoImpersonation:   {Default: true, PreRelease: featuregate.Alpha},
+	AuthenticateApplication:       {Default: false, PreRelease: featuregate.Alpha},
 }
 
 func init() {

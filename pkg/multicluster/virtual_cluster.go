@@ -18,17 +18,23 @@ package multicluster
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	apilabels "k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/selection"
 	apitypes "k8s.io/apimachinery/pkg/types"
 	clusterv1 "open-cluster-management.io/api/cluster/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	prismclusterv1alpha1 "github.com/kubevela/prism/pkg/apis/cluster/v1alpha1"
 	"github.com/oam-dev/cluster-gateway/pkg/apis/cluster/v1alpha1"
+	clustercommon "github.com/oam-dev/cluster-gateway/pkg/common"
 
 	"github.com/oam-dev/kubevela/apis/types"
 	velaerrors "github.com/oam-dev/kubevela/pkg/utils/errors"
@@ -38,12 +44,37 @@ import (
 // like cluster secret or ocm managed cluster
 type VirtualCluster struct {
 	Name     string
+	Alias    string
 	Type     v1alpha1.CredentialType
 	EndPoint string
 	Accepted bool
 	Labels   map[string]string
 	Metrics  *ClusterMetrics
 	Object   client.Object
+}
+
+// FullName the name with alias if available
+func (vc *VirtualCluster) FullName() string {
+	if vc.Alias != "" {
+		return fmt.Sprintf("%s (%s)", vc.Name, vc.Alias)
+	}
+	return vc.Name
+}
+
+func getClusterAlias(o client.Object) string {
+	if annots := o.GetAnnotations(); annots != nil {
+		return annots[types.AnnotationClusterAlias]
+	}
+	return ""
+}
+
+func setClusterAlias(o client.Object, alias string) {
+	annots := o.GetAnnotations()
+	if annots == nil {
+		annots = map[string]string{}
+	}
+	annots[types.AnnotationClusterAlias] = alias
+	o.SetAnnotations(annots)
 }
 
 // NewVirtualClusterFromLocal return virtual cluster corresponding to local cluster
@@ -65,15 +96,16 @@ func NewVirtualClusterFromSecret(secret *corev1.Secret) (*VirtualCluster, error)
 	if labels == nil {
 		labels = map[string]string{}
 	}
-	if _endpoint, ok := labels[v1alpha1.LabelKeyClusterEndpointType]; ok {
+	if _endpoint, ok := labels[clustercommon.LabelKeyClusterEndpointType]; ok {
 		endpoint = _endpoint
 	}
-	credType, ok := labels[v1alpha1.LabelKeyClusterCredentialType]
+	credType, ok := labels[clustercommon.LabelKeyClusterCredentialType]
 	if !ok {
 		return nil, errors.Errorf("secret is not a valid cluster secret, no credential type found")
 	}
 	return &VirtualCluster{
 		Name:     secret.Name,
+		Alias:    getClusterAlias(secret),
 		Type:     v1alpha1.CredentialType(credType),
 		EndPoint: endpoint,
 		Accepted: true,
@@ -90,6 +122,7 @@ func NewVirtualClusterFromManagedCluster(managedCluster *clusterv1.ManagedCluste
 	}
 	return &VirtualCluster{
 		Name:     managedCluster.Name,
+		Alias:    getClusterAlias(managedCluster),
 		Type:     types.CredentialTypeOCMManagedCluster,
 		EndPoint: types.ClusterBlankEndpoint,
 		Accepted: managedCluster.Spec.HubAcceptsClient,
@@ -157,7 +190,7 @@ type MatchVirtualClusterLabels map[string]string
 // ApplyToList applies this configuration to the given list options.
 func (m MatchVirtualClusterLabels) ApplyToList(opts *client.ListOptions) {
 	sel := apilabels.SelectorFromValidatedSet(map[string]string(m))
-	r, err := apilabels.NewRequirement(v1alpha1.LabelKeyClusterCredentialType, selection.Exists, nil)
+	r, err := apilabels.NewRequirement(clustercommon.LabelKeyClusterCredentialType, selection.Exists, nil)
 	if err == nil {
 		sel = sel.Add(*r)
 	}
@@ -204,4 +237,41 @@ func FindVirtualClustersByLabels(ctx context.Context, c client.Client, labels ma
 		}
 	}
 	return clusters, nil
+}
+
+// ClusterNameMapper mapper for cluster names
+type ClusterNameMapper interface {
+	GetClusterName(string) string
+}
+
+type clusterAliasMapper map[string]string
+
+// GetClusterName .
+func (cm clusterAliasMapper) GetClusterName(cluster string) string {
+	if alias := strings.TrimSpace(cm[cluster]); alias != "" {
+		return fmt.Sprintf("%s (%s)", cluster, alias)
+	}
+	return cluster
+}
+
+// NewClusterNameMapper load all clusters and return the mapper of their names
+func NewClusterNameMapper(ctx context.Context, c client.Client) (ClusterNameMapper, error) {
+	cm := clusterAliasMapper(make(map[string]string))
+	clusters := &prismclusterv1alpha1.ClusterList{}
+	if err := c.List(ctx, clusters); err == nil {
+		for _, cluster := range clusters.Items {
+			cm[cluster.Name] = cluster.Spec.Alias
+		}
+		return cm, nil
+	} else if err != nil && !meta.IsNoMatchError(err) && !runtime.IsNotRegisteredError(err) {
+		return nil, err
+	}
+	vcs, err := ListVirtualClusters(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	for _, cluster := range vcs {
+		cm[cluster.Name] = cluster.Alias
+	}
+	return cm, nil
 }

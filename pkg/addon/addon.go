@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -33,10 +34,14 @@ import (
 
 	"cuelang.org/go/cue"
 	cueyaml "cuelang.org/go/encoding/yaml"
+	"github.com/Masterminds/semver/v3"
 	"github.com/google/go-github/v32/github"
-	"github.com/hashicorp/go-version"
 	"github.com/pkg/errors"
+	"github.com/xanzy/go-gitlab"
 	"golang.org/x/oauth2"
+	"helm.sh/helm/v3/pkg/chart"
+	"helm.sh/helm/v3/pkg/chart/loader"
+	"helm.sh/helm/v3/pkg/chartutil"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -195,6 +200,10 @@ func GetPatternFromItem(it Item, r AsyncReader, rootPath string) string {
 		if strings.HasPrefix(relativePath, strings.Join([]string{rootPath, p.Value}, "/")) {
 			return p.Value
 		}
+		if strings.HasPrefix(relativePath, filepath.Join(rootPath, p.Value)) {
+			// for enable addon by load dir, compatible with linux or windows os
+			return p.Value
+		}
 	}
 	return ""
 }
@@ -286,6 +295,7 @@ func GetUIDataFromReader(r AsyncReader, meta *SourceMeta, opt ListOptions) (*UID
 			return nil, fmt.Errorf("fail to generate openAPIschema for addon %s : %w", meta.Name, err)
 		}
 	}
+	addon.AvailableVersions = []string{addon.Version}
 	return addon, nil
 }
 
@@ -356,7 +366,7 @@ func readResFile(a *InstallPackage, reader AsyncReader, readPath string) error {
 	if filename == "parameter.cue" {
 		return nil
 	}
-	file := ElementFile{Data: b, Name: path.Base(readPath)}
+	file := ElementFile{Data: b, Name: filepath.Base(readPath)}
 	switch filepath.Ext(filename) {
 	case ".cue":
 		a.CUETemplates = append(a.CUETemplates, file)
@@ -374,7 +384,7 @@ func readDefSchemaFile(a *InstallPackage, reader AsyncReader, readPath string) e
 	if err != nil {
 		return err
 	}
-	a.DefSchemas = append(a.DefSchemas, ElementFile{Data: b, Name: path.Base(readPath)})
+	a.DefSchemas = append(a.DefSchemas, ElementFile{Data: b, Name: filepath.Base(readPath)})
 	return nil
 }
 
@@ -385,7 +395,7 @@ func readDefFile(a *UIData, reader AsyncReader, readPath string) error {
 		return err
 	}
 	filename := path.Base(readPath)
-	file := ElementFile{Data: b, Name: path.Base(readPath)}
+	file := ElementFile{Data: b, Name: filepath.Base(readPath)}
 	switch filepath.Ext(filename) {
 	case ".cue":
 		a.CUEDefinitions = append(a.CUEDefinitions, file)
@@ -444,6 +454,15 @@ func createGiteeHelper(content *utils.Content, token string) *giteeHelper {
 		Client: cli,
 		Meta:   content,
 	}
+}
+
+func createGitlabHelper(content *utils.Content, token string) (*gitlabHelper, error) {
+	newClient, err := gitlab.NewClient(token, gitlab.WithBaseURL(content.GitlabContent.Host))
+
+	return &gitlabHelper{
+		Client: newClient,
+		Meta:   content,
+	}, err
 }
 
 // readRepo will read relative path (relative to Meta.Path)
@@ -566,7 +585,7 @@ func renderResources(addon *InstallPackage, args map[string]interface{}) ([]comm
 	}
 
 	for _, tmpl := range addon.CUETemplates {
-		comp, err := renderCUETemplate(tmpl, addon.Parameters, args)
+		comp, err := renderCUETemplate(tmpl, addon.Parameters, args, addon.Meta)
 		if err != nil {
 			return nil, NewAddonError(fmt.Sprintf("fail to render cue template %s", err.Error()))
 		}
@@ -588,6 +607,9 @@ func formatAppFramework(addon *InstallPackage) *v1beta1.Application {
 			},
 		}
 	}
+	if app.Spec.Components == nil {
+		app.Spec.Components = []common2.ApplicationComponent{}
+	}
 	app.Name = Convert2AppName(addon.Name)
 	// force override the namespace defined vela with DefaultVelaNS,this value can be modified by Env
 	app.SetNamespace(types.DefaultKubeVelaNS)
@@ -595,6 +617,7 @@ func formatAppFramework(addon *InstallPackage) *v1beta1.Application {
 		app.Labels = make(map[string]string)
 	}
 	app.Labels[oam.LabelAddonName] = addon.Name
+	app.Labels[oam.LabelAddonVersion] = addon.Version
 	return app
 }
 
@@ -650,21 +673,8 @@ func RenderApp(ctx context.Context, addon *InstallPackage, k8sClient client.Clie
 	}
 
 	switch {
-	case app.Spec.Workflow != nil && (len(app.Spec.Workflow.Steps) > 0 || app.Spec.Workflow.Ref != ""):
-		// if users have already specified workflow in addon, this won't work
 	case isDeployToRuntimeOnly(addon):
-		if len(deployClusters) > 0 {
-			// deploy to specified clusters
-			if app.Spec.Policies == nil {
-				app.Spec.Policies = []v1beta1.AppPolicy{}
-			}
-			body, _ := json.Marshal(map[string][]string{types.ClustersArg: deployClusters})
-			app.Spec.Policies = append(app.Spec.Policies, v1beta1.AppPolicy{
-				Name:       "specified-addon-clusters",
-				Type:       v1alpha1.TopologyPolicyType,
-				Properties: &runtime.RawExtension{Raw: body},
-			})
-		} else {
+		if len(deployClusters) == 0 {
 			// deploy to all clusters
 			app.Spec.Workflow = &v1beta1.Workflow{Steps: []v1beta1.WorkflowStep{
 				{
@@ -676,6 +686,39 @@ func RenderApp(ctx context.Context, addon *InstallPackage, k8sClient client.Clie
 					Type: "deploy2runtime",
 				},
 			}}
+			// TODO(wonderflow): this can be merged into len(deployClusters) > 0 case
+			/*
+				allclusters, err := multicluster.ListVirtualClusters(ctx, k8sClient)
+				if err != nil {
+					return nil, err
+				}
+				for _, c := range allclusters {
+					deployClusters = append(deployClusters, c.Name)
+				}
+			*/
+		} else {
+			var found bool
+			for _, c := range deployClusters {
+				if c == multicluster.ClusterLocalName {
+					found = true
+					break
+				}
+			}
+			if !found {
+				deployClusters = append(deployClusters, multicluster.ClusterLocalName)
+			}
+			// deploy to specified clusters
+			if app.Spec.Policies == nil {
+				app.Spec.Policies = []v1beta1.AppPolicy{}
+			}
+			body, _ := json.Marshal(map[string][]string{types.ClustersArg: deployClusters})
+			app.Spec.Policies = append(app.Spec.Policies, v1beta1.AppPolicy{
+				Name:       "specified-addon-clusters",
+				Type:       v1alpha1.TopologyPolicyType,
+				Properties: &runtime.RawExtension{Raw: body},
+			})
+			// addon should not contain workflow, this also update legacy addon with deploy2runtime steps
+			app.Spec.Workflow = nil
 		}
 	case addon.Name == ObservabilityAddon:
 		clusters, err := allocateDomainForAddon(ctx, k8sClient)
@@ -907,17 +950,28 @@ func renderSchemaConfigmap(elem ElementFile) (*unstructured.Unstructured, error)
 }
 
 // renderCUETemplate will return a component from cue template
-func renderCUETemplate(elem ElementFile, parameters string, args map[string]interface{}) (*common2.ApplicationComponent, error) {
+func renderCUETemplate(elem ElementFile, parameters string, args map[string]interface{}, metadata Meta) (*common2.ApplicationComponent, error) {
 	bt, err := json.Marshal(args)
 	if err != nil {
 		return nil, err
 	}
+	var contextFile = strings.Builder{}
 	var paramFile = cuemodel.ParameterFieldName + ": {}"
 	if string(bt) != "null" {
 		paramFile = fmt.Sprintf("%s: %s", cuemodel.ParameterFieldName, string(bt))
 	}
-	param := fmt.Sprintf("%s\n%s", paramFile, parameters)
-	v, err := value.NewValue(param, nil, "")
+	// addon metadata context
+	metadataJSON, err := json.Marshal(metadata)
+	if err != nil {
+		return nil, err
+	}
+	contextFile.WriteString(fmt.Sprintf("context: metadata: %s\n", string(metadataJSON)))
+	// parameter definition
+	contextFile.WriteString(paramFile + "\n")
+	// user custom parameter
+	contextFile.WriteString(parameters + "\n")
+
+	v, err := value.NewValue(contextFile.String(), nil, "")
 	if err != nil {
 		return nil, err
 	}
@@ -1034,7 +1088,7 @@ func (h *Installer) enableAddon(addon *InstallPackage) error {
 	h.addon = addon
 	err = checkAddonVersionMeetRequired(h.ctx, addon.SystemRequirements, h.cli, h.dc)
 	if err != nil {
-		return ErrVersionMismatch
+		return VersionUnMatchError{addonName: addon.Name, err: err}
 	}
 
 	if err = h.installDependency(addon); err != nil {
@@ -1051,26 +1105,40 @@ func (h *Installer) enableAddon(addon *InstallPackage) error {
 	return nil
 }
 
-func (h *Installer) loadInstallPackage(name string) (*InstallPackage, error) {
-	metas, err := h.getAddonMeta()
-	if err != nil {
-		return nil, errors.Wrap(err, "fail to get addon meta")
+func (h *Installer) loadInstallPackage(name, version string) (*InstallPackage, error) {
+	var installPackage *InstallPackage
+	var err error
+	if !IsVersionRegistry(*h.r) {
+		metas, err := h.getAddonMeta()
+		if err != nil {
+			return nil, errors.Wrap(err, "fail to get addon meta")
+		}
+
+		meta, ok := metas[name]
+		if !ok {
+			return nil, ErrNotExist
+		}
+		var uiData *UIData
+		uiData, err = h.cache.GetUIData(*h.r, name, version)
+		if err != nil {
+			return nil, err
+		}
+		// enable this addon if it's invisible
+		installPackage, err = h.r.GetInstallPackage(&meta, uiData)
+		if err != nil {
+			return nil, errors.Wrap(err, "fail to find dependent addon in source repository")
+		}
+	} else {
+		versionedRegistry := BuildVersionedRegistry(h.r.Name, h.r.Helm.URL, &common.HTTPOption{
+			Username: h.r.Helm.Username,
+			Password: h.r.Helm.Password,
+		})
+		installPackage, err = versionedRegistry.GetAddonInstallPackage(context.Background(), name, version)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	meta, ok := metas[name]
-	if !ok {
-		return nil, ErrNotExist
-	}
-	var uiData *UIData
-	uiData, err = h.cache.GetUIData(*h.r, name)
-	if err != nil {
-		return nil, err
-	}
-	// enable this addon if it's invisible
-	installPackage, err := h.r.GetInstallPackage(&meta, uiData)
-	if err != nil {
-		return nil, errors.Wrap(err, "fail to find dependent addon in source repository")
-	}
 	return installPackage, nil
 }
 
@@ -1098,7 +1166,8 @@ func (h *Installer) installDependency(addon *InstallPackage) error {
 		if !apierrors.IsNotFound(err) {
 			return err
 		}
-		depAddon, err := h.loadInstallPackage(dep.Name)
+		// always install addon's latest version
+		depAddon, err := h.loadInstallPackage(dep.Name, "")
 		if err != nil {
 			return err
 		}
@@ -1130,6 +1199,26 @@ func (h *Installer) checkDependency(addon *InstallPackage) ([]string, error) {
 	}
 	return needEnable, nil
 }
+func (h *Installer) createOrUpdate(app *v1beta1.Application) error {
+	var getapp v1beta1.Application
+	err := h.cli.Get(h.ctx, client.ObjectKey{Name: app.Name, Namespace: app.Namespace}, &getapp)
+	if apierrors.IsNotFound(err) {
+		return h.cli.Create(h.ctx, app)
+	}
+	if err != nil {
+		return err
+	}
+	getapp.Spec = app.Spec
+	getapp.Labels = app.Labels
+	getapp.Annotations = app.Annotations
+	err = h.cli.Update(h.ctx, &getapp)
+	if err != nil {
+		klog.Errorf("fail to create application: %v", err)
+		return errors.Wrap(err, "fail to create application")
+	}
+	getapp.DeepCopyInto(app)
+	return nil
+}
 
 func (h *Installer) dispatchAddonResource(addon *InstallPackage) error {
 	app, err := RenderApp(h.ctx, addon, h.cli, h.args)
@@ -1159,10 +1248,8 @@ func (h *Installer) dispatchAddonResource(addon *InstallPackage) error {
 		return errors.Wrapf(err, "cannot pass definition to addon app's annotation")
 	}
 
-	err = h.apply.Apply(h.ctx, app, apply.DisableUpdateAnnotation())
-	if err != nil {
-		klog.Errorf("fail to create application: %v", err)
-		return errors.Wrap(err, "fail to create application")
+	if err = h.createOrUpdate(app); err != nil {
+		return err
 	}
 
 	for _, def := range defs {
@@ -1278,7 +1365,7 @@ func checkAddonVersionMeetRequired(ctx context.Context, require *SystemRequireme
 			return err
 		}
 		if !res {
-			return fmt.Errorf("vela cli/ux version: %s cannot meet requirement", version2.VelaVersion)
+			return fmt.Errorf("vela cli/ux version: %s  require: %s", version2.VelaVersion, require.VelaVersion)
 		}
 	}
 
@@ -1295,7 +1382,7 @@ func checkAddonVersionMeetRequired(ctx context.Context, require *SystemRequireme
 			return err
 		}
 		if !res {
-			return fmt.Errorf("the vela core controller: %s cannot meet requirement ", imageVersion)
+			return fmt.Errorf("the vela core controller: %s require: %s", imageVersion, require.VelaVersion)
 		}
 	}
 
@@ -1316,7 +1403,7 @@ func checkAddonVersionMeetRequired(ctx context.Context, require *SystemRequireme
 		}
 
 		if !res {
-			return fmt.Errorf("the kubernetes version %s cannot meet requirement", k8sVersion.GitVersion)
+			return fmt.Errorf("the kubernetes version %s require: %s", k8sVersion.GitVersion, require.KubernetesVersion)
 		}
 	}
 
@@ -1329,11 +1416,11 @@ func checkSemVer(actual string, require string) (bool, error) {
 	}
 	smeVer := strings.TrimPrefix(actual, "v")
 	l := strings.ReplaceAll(require, "v", " ")
-	constraint, err := version.NewConstraint(l)
+	constraint, err := semver.NewConstraint(l)
 	if err != nil {
 		return false, err
 	}
-	v, err := version.NewVersion(smeVer)
+	v, err := semver.NewVersion(smeVer)
 	if err != nil {
 		return false, err
 	}
@@ -1357,4 +1444,52 @@ func fetchVelaCoreImageTag(ctx context.Context, k8sClient client.Client) (string
 		}
 	}
 	return tag, nil
+}
+
+// PackageAddon package vela addon directory into a helm chart compatible archive and return its absolute path
+func PackageAddon(addonDictPath string) (string, error) {
+	meta := &Meta{}
+	metaData, err := ioutil.ReadFile(filepath.Clean(filepath.Join(addonDictPath, MetadataFileName)))
+	if err != nil {
+		return "", err
+	}
+
+	err = yaml.Unmarshal(metaData, meta)
+	if err != nil {
+		return "", err
+	}
+
+	chartFile := &chart.Metadata{
+		Name:        meta.Name,
+		Description: meta.Description,
+		// define Vela addon's type to be library in order to prevent installation of a common chart. Please refer to https://helm.sh/docs/topics/library_charts/
+		Type:       "library",
+		Version:    meta.Version,
+		AppVersion: meta.Version,
+		APIVersion: chart.APIVersionV2,
+		Icon:       meta.Icon,
+		Home:       meta.URL,
+		Keywords:   meta.Tags,
+	}
+
+	// save the Chart.yaml file in order to be compatible with helm chart
+	err = chartutil.SaveChartfile(filepath.Join(addonDictPath, chartutil.ChartfileName), chartFile)
+	if err != nil {
+		return "", err
+	}
+
+	ch, err := loader.LoadDir(addonDictPath)
+	if err != nil {
+		return "", err
+	}
+
+	dest, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+	archive, err := chartutil.Save(ch, dest)
+	if err != nil {
+		return "", err
+	}
+	return archive, nil
 }

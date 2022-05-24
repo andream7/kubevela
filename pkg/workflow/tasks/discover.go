@@ -18,6 +18,8 @@ package tasks
 
 import (
 	"context"
+	"encoding/json"
+	builtintime "time"
 
 	"github.com/pkg/errors"
 	"k8s.io/client-go/rest"
@@ -27,6 +29,7 @@ import (
 	"github.com/oam-dev/kubevela/apis/core.oam.dev/v1beta1"
 	"github.com/oam-dev/kubevela/pkg/cue/packages"
 	"github.com/oam-dev/kubevela/pkg/cue/process"
+	monitorContext "github.com/oam-dev/kubevela/pkg/monitor/context"
 	"github.com/oam-dev/kubevela/pkg/oam/discoverymapper"
 	"github.com/oam-dev/kubevela/pkg/velaql/providers/query"
 	wfContext "github.com/oam-dev/kubevela/pkg/workflow/context"
@@ -68,42 +71,57 @@ func (td *taskDiscover) GetTaskGenerator(ctx context.Context, name string) (type
 }
 
 func suspend(step v1beta1.WorkflowStep, opt *types.GeneratorOptions) (types.TaskRunner, error) {
-	return &suspendTaskRunner{
+	tr := &suspendTaskRunner{
 		id:   opt.ID,
 		name: step.Name,
+		wait: false,
+	}
+
+	doDelay, _, err := GetSuspendStepDurationWaiting(step)
+	if err != nil {
+		return nil, err
+	}
+
+	tr.wait = doDelay
+
+	return tr, nil
+}
+
+// StepGroup is the step group runner
+func StepGroup(step v1beta1.WorkflowStep, opt *types.GeneratorOptions) (types.TaskRunner, error) {
+	return &stepGroupTaskRunner{
+		id:             opt.ID,
+		name:           step.Name,
+		subTaskRunners: opt.SubTaskRunners,
 	}, nil
 }
 
-func newTaskDiscover(providerHandlers providers.Providers, pd *packages.PackageDiscover, pCtx process.Context, templateLoader template.Loader) types.TaskDiscover {
+func newTaskDiscover(ctx monitorContext.Context, providerHandlers providers.Providers, pd *packages.PackageDiscover, pCtx process.Context, templateLoader template.Loader) types.TaskDiscover {
 	// install builtin provider
 	workspace.Install(providerHandlers)
 	email.Install(providerHandlers)
-	util.Install(providerHandlers)
+	util.Install(ctx, providerHandlers)
 
 	return &taskDiscover{
 		builtins: map[string]types.TaskGenerator{
-			types.WorkflowStepTypeSuspend: suspend,
+			types.WorkflowStepTypeSuspend:   suspend,
+			types.WorkflowStepTypeStepGroup: StepGroup,
 		},
 		remoteTaskDiscover: custom.NewTaskLoader(templateLoader.LoadTaskTemplate, pd, providerHandlers, 0, pCtx),
 		templateLoader:     templateLoader,
 	}
 }
 
-// NewTaskDiscover will create a client for load task generator.
-func NewTaskDiscover(providerHandlers providers.Providers, pd *packages.PackageDiscover, cli client.Client, dm discoverymapper.DiscoveryMapper, pCtx process.Context) types.TaskDiscover {
-	templateLoader := template.NewWorkflowStepTemplateLoader(cli, dm)
-	return newTaskDiscover(providerHandlers, pd, pCtx, templateLoader)
-}
-
 // NewTaskDiscoverFromRevision will create a client for load task generator from ApplicationRevision.
-func NewTaskDiscoverFromRevision(providerHandlers providers.Providers, pd *packages.PackageDiscover, rev *v1beta1.ApplicationRevision, dm discoverymapper.DiscoveryMapper, pCtx process.Context) types.TaskDiscover {
+func NewTaskDiscoverFromRevision(ctx monitorContext.Context, providerHandlers providers.Providers, pd *packages.PackageDiscover, rev *v1beta1.ApplicationRevision, dm discoverymapper.DiscoveryMapper, pCtx process.Context) types.TaskDiscover {
 	templateLoader := template.NewWorkflowStepTemplateRevisionLoader(rev, dm)
-	return newTaskDiscover(providerHandlers, pd, pCtx, templateLoader)
+	return newTaskDiscover(ctx, providerHandlers, pd, pCtx, templateLoader)
 }
 
 type suspendTaskRunner struct {
 	id   string
 	name string
+	wait bool
 }
 
 // Name return suspend step name.
@@ -112,17 +130,81 @@ func (tr *suspendTaskRunner) Name() string {
 }
 
 // Run make workflow suspend.
-func (tr *suspendTaskRunner) Run(ctx wfContext.Context, options *types.TaskRunOptions) (common.WorkflowStepStatus, *types.Operation, error) {
-	return common.WorkflowStepStatus{
+func (tr *suspendTaskRunner) Run(ctx wfContext.Context, options *types.TaskRunOptions) (common.StepStatus, *types.Operation, error) {
+	stepStatus := common.StepStatus{
 		ID:    tr.id,
 		Name:  tr.name,
 		Type:  types.WorkflowStepTypeSuspend,
 		Phase: common.WorkflowStepPhaseSucceeded,
-	}, &types.Operation{Suspend: true}, nil
+	}
+
+	if tr.wait {
+		stepStatus.Phase = common.WorkflowStepPhaseRunning
+	}
+
+	return stepStatus, &types.Operation{Suspend: true}, nil
 }
 
 // Pending check task should be executed or not.
 func (tr *suspendTaskRunner) Pending(ctx wfContext.Context) bool {
+	return false
+}
+
+type stepGroupTaskRunner struct {
+	id             string
+	name           string
+	subTaskRunners []types.TaskRunner
+}
+
+// Name return suspend step name.
+func (tr *stepGroupTaskRunner) Name() string {
+	return tr.name
+}
+
+// Run make workflow step group.
+func (tr *stepGroupTaskRunner) Run(ctx wfContext.Context, options *types.TaskRunOptions) (common.StepStatus, *types.Operation, error) {
+	e := options.Engine
+	if len(tr.subTaskRunners) > 0 {
+		// set sub steps to dag mode for now
+		e.SetParentRunner(tr.name)
+		if err := e.Run(tr.subTaskRunners, true); err != nil {
+			return common.StepStatus{
+				ID:    tr.id,
+				Name:  tr.name,
+				Type:  types.WorkflowStepTypeStepGroup,
+				Phase: common.WorkflowStepPhaseRunning,
+			}, e.GetOperation(), err
+		}
+		e.SetParentRunner("")
+	}
+	stepStatus := e.GetStepStatus(tr.name)
+	var phase common.WorkflowStepPhase
+	subStepPhases := make(map[common.WorkflowStepPhase]int)
+	for _, subStepsStatus := range stepStatus.SubStepsStatus {
+		subStepPhases[subStepsStatus.Phase]++
+	}
+	switch {
+	case len(stepStatus.SubStepsStatus) < len(tr.subTaskRunners):
+		phase = common.WorkflowStepPhaseRunning
+	case subStepPhases[common.WorkflowStepPhaseRunning] > 0:
+		phase = common.WorkflowStepPhaseRunning
+	case subStepPhases[common.WorkflowStepPhaseStopped] > 0:
+		phase = common.WorkflowStepPhaseStopped
+	case subStepPhases[common.WorkflowStepPhaseFailed] > 0:
+		phase = common.WorkflowStepPhaseFailed
+	default:
+		phase = common.WorkflowStepPhaseSucceeded
+	}
+	return common.StepStatus{
+		ID:    tr.id,
+		Name:  tr.name,
+		Type:  types.WorkflowStepTypeStepGroup,
+		Phase: phase,
+	}, e.GetOperation(), nil
+}
+
+// Pending check task should be executed or not.
+func (tr *stepGroupTaskRunner) Pending(ctx wfContext.Context) bool {
 	return false
 }
 
@@ -142,4 +224,28 @@ func NewViewTaskDiscover(pd *packages.PackageDiscover, cli client.Client, cfg *r
 		remoteTaskDiscover: custom.NewTaskLoader(templateLoader.LoadTaskTemplate, pd, handlerProviders, logLevel, pCtx),
 		templateLoader:     templateLoader,
 	}
+}
+
+// GetSuspendStepDurationWaiting get suspend step wait duration
+func GetSuspendStepDurationWaiting(step v1beta1.WorkflowStep) (bool, builtintime.Duration, error) {
+	if step.Properties.Size() > 0 {
+		o := struct {
+			Duration string `json:"duration"`
+		}{}
+		js, err := common.RawExtensionPointer{RawExtension: step.Properties}.MarshalJSON()
+		if err != nil {
+			return false, 0, err
+		}
+
+		if err := json.Unmarshal(js, &o); err != nil {
+			return false, 0, err
+		}
+
+		if o.Duration != "" {
+			waitDuration, err := builtintime.ParseDuration(o.Duration)
+			return true, waitDuration, err
+		}
+	}
+
+	return false, 0, nil
 }

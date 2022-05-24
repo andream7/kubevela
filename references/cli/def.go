@@ -30,6 +30,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/oam-dev/kubevela/pkg/cue/packages"
+
 	"cuelang.org/go/cue"
 	"cuelang.org/go/encoding/gocode/gocodec"
 	crossplane "github.com/oam-dev/terraform-controller/api/types/crossplane-runtime"
@@ -81,6 +83,7 @@ func DefinitionCommandGroup(c common.Args, order string) *cobra.Command {
 		NewDefinitionInitCommand(c),
 		NewDefinitionValidateCommand(c),
 		NewDefinitionGenDocCommand(c),
+		NewDefinitionGenAPICommand(c),
 	)
 	return cmd
 }
@@ -108,7 +111,7 @@ func getPrompt(cmd *cobra.Command, reader *bufio.Reader, description string, pro
 
 func loadYAMLBytesFromFileOrHTTP(pathOrURL string) ([]byte, error) {
 	if strings.HasPrefix(pathOrURL, "http://") || strings.HasPrefix(pathOrURL, "https://") {
-		return common.HTTPGet(context.Background(), pathOrURL)
+		return common.HTTPGetWithOption(context.Background(), pathOrURL, nil)
 	}
 	return os.ReadFile(path.Clean(pathOrURL))
 }
@@ -295,7 +298,7 @@ func generateTerraformTypedComponentDefinition(cmd *cobra.Command, name, kind, p
 	}
 
 	switch provider {
-	case "aws", "azure", "alibaba", "tencent", "gcp", "baidu", "elastic":
+	case "aws", "azure", "alibaba", "tencent", "gcp", "baidu", "elastic", "ucloud":
 		var terraform *commontype.Terraform
 
 		git, err := cmd.Flags().GetString(FlagGit)
@@ -349,7 +352,7 @@ func generateTerraformTypedComponentDefinition(cmd *cobra.Command, name, kind, p
 			Spec: v1beta1.ComponentDefinitionSpec{
 				Workload: commontype.WorkloadTypeDescriptor{
 					Definition: commontype.WorkloadGVK{
-						APIVersion: "terraform.core.oam.dev/v1beta1",
+						APIVersion: "terraform.core.oam.dev/v1beta2",
 						Kind:       "Configuration",
 					},
 				},
@@ -371,7 +374,7 @@ func generateTerraformTypedComponentDefinition(cmd *cobra.Command, name, kind, p
 		}
 		return out.String(), nil
 	default:
-		return "", errors.Errorf("Provider `%s` is not supported. Only `alibaba`, `aws`, `azure` are supported.", provider)
+		return "", errors.Errorf("Provider `%s` is not supported. Only `alibaba`, `aws`, `azure`, `gcp`, `baidu`, `tencent`, `elastic`, `ucloud` are supported.", provider)
 	}
 }
 
@@ -457,31 +460,39 @@ func NewDefinitionGenDocCommand(c common.Args) *cobra.Command {
 				return fmt.Errorf("please specify definition name or a definition file")
 			}
 
-			var namespace string
-			if !strings.HasSuffix(args[0], ".yaml") {
-				var err error
-				namespace, err = cmd.Flags().GetString(FlagNamespace)
-				if err != nil {
-					return errors.Wrapf(err, "failed to get `%s` or `%s`", Namespace, Local)
+			ref := &plugins.MarkdownReference{}
+			if strings.HasSuffix(args[0], ".yaml") {
+				// read from local file
+				localFilePath := args[0]
+				fileName := filepath.Base(localFilePath)
+				if !strings.HasSuffix(fileName, ".yaml") {
+					return fmt.Errorf("invalid local file path `%s`", localFilePath)
 				}
+				ref.DefinitionName = strings.TrimSuffix(fileName, ".yaml")
+				ref.Local = &plugins.Local{Path: localFilePath}
+			} else {
+				namespace, err := cmd.Flags().GetString(FlagNamespace)
+				if err != nil {
+					return errors.Wrapf(err, "failed to get `%s`", Namespace)
+				}
+				ref.DefinitionName = args[0]
+				ref.Remote = &plugins.Remote{Namespace: namespace}
 			}
 
-			ref := &plugins.MarkdownReference{}
 			ctx := context.Background()
-			ref.DefinitionName = args[0]
 			pathEn := plugins.KubeVelaIOTerraformPath
 			ref.I18N = plugins.En
-			if err := ref.GenerateReferenceDocs(ctx, c, pathEn, namespace); err != nil {
+			if err := ref.GenerateReferenceDocs(ctx, c, pathEn); err != nil {
 				return errors.Wrap(err, "failed to generate reference docs")
 			}
-			cmd.Printf("Generated docs in English for %s in %s/%s.md\n", args[0], pathEn, args[0])
+			cmd.Printf("Generated docs in English for %s in %s/%s.md\n", args[0], pathEn, ref.DefinitionName)
 
 			pathZh := plugins.KubeVelaIOTerraformPathZh
 			ref.I18N = plugins.Zh
-			if err := ref.GenerateReferenceDocs(ctx, c, pathZh, namespace); err != nil {
+			if err := ref.GenerateReferenceDocs(ctx, c, pathZh); err != nil {
 				return errors.Wrap(err, "failed to generate reference docs")
 			}
-			cmd.Printf("Generated docs in Chinese for %s in %s/%s.md\n", args[0], pathZh, args[0])
+			cmd.Printf("Generated docs in Chinese for %s in %s/%s.md\n", args[0], pathZh, ref.DefinitionName)
 
 			return nil
 		},
@@ -920,5 +931,66 @@ func NewDefinitionValidateCommand(c common.Args) *cobra.Command {
 			return nil
 		},
 	}
+	return cmd
+}
+
+// NewDefinitionGenAPICommand create the `vela def gen-api` command to help user generate Go code from the definition
+func NewDefinitionGenAPICommand(c common.Args) *cobra.Command {
+	var (
+		skipPackageName bool
+		packageName     string
+		prefix          string
+	)
+
+	cmd := &cobra.Command{
+		Use:   "gen-api DEFINITION.cue",
+		Short: "Generate Go struct of Parameter from X-Definition.",
+		Long: "Generate Go struct of Parameter from definition file.\n" +
+			"* Currently, this function is still working in progress and not all formats of parameter in X-definition are supported yet.",
+		Example: "# Command below will generate the Go struct for the my-def.cue file.\n" +
+			"> vela def gen-api my-def.cue",
+		Args: cobra.ExactValidArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cueBytes, err := os.ReadFile(args[0])
+			if err != nil {
+				return errors.Wrapf(err, "failed to read %s", args[0])
+			}
+			def := pkgdef.Definition{Unstructured: unstructured.Unstructured{}}
+			config, err := c.GetConfig()
+			if err != nil {
+				return err
+			}
+			if err := def.FromCUEString(string(cueBytes), config); err != nil {
+				return errors.Wrapf(err, "failed to parse CUE")
+			}
+			templateString, _, err := unstructured.NestedString(def.Object, pkgdef.DefinitionTemplateKeys...)
+			if err != nil {
+				return err
+			}
+			pd, err := packages.NewPackageDiscover(config)
+			if err != nil {
+				return err
+			}
+			value, err := common.GetCUEParameterValue(templateString, pd)
+			if err != nil {
+				return err
+			}
+
+			pkgdef.DefaultNamer.SetPrefix(prefix)
+			structs, err := pkgdef.GeneratorParameterStructs(value)
+			if err != nil {
+				return errors.Wrapf(err, "failed to generate Go code")
+			}
+
+			if !skipPackageName {
+				fmt.Printf("package %s\n\n", packageName)
+			}
+			pkgdef.PrintParamGosStruct(structs)
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&skipPackageName, "skip-package-name", false, "Skip package name in generated Go code.")
+	cmd.Flags().StringVar(&packageName, "package-name", "main", "Specify the package name in generated Go code.")
+	cmd.Flags().StringVar(&prefix, "prefix", "", "Specify the prefix of the generated Go struct.")
 	return cmd
 }

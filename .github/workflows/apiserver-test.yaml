@@ -6,7 +6,9 @@ on:
       - master
       - release-*
       - apiserver
-  workflow_dispatch: {}
+    tags:
+      - v*
+  workflow_dispatch: { }
   pull_request:
     branches:
       - master
@@ -18,6 +20,8 @@ env:
   GO_VERSION: '1.17'
   GOLANGCI_VERSION: 'v1.38'
   KIND_VERSION: 'v0.7.0'
+  KIND_IMAGE_VERSION: '[\"v1.20.7\"]'
+  KIND_IMAGE_VERSIONS: '[\"v1.18.20\",\"v1.20.7\",\"v1.22.7\"]'
 
 jobs:
 
@@ -35,10 +39,28 @@ jobs:
           do_not_skip: '["workflow_dispatch", "schedule", "push"]'
           concurrent_skipping: false
 
+  set-k8s-matrix:
+    runs-on: ubuntu-20.04
+    outputs:
+      matrix: ${{ steps.set-k8s-matrix.outputs.matrix }}
+    steps:
+      - id: set-k8s-matrix
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "pushing tag: ${{ github.ref_name }}"
+            echo "::set-output name=matrix::${{ env.KIND_IMAGE_VERSIONS }}"
+          else
+            echo "::set-output name=matrix::${{ env.KIND_IMAGE_VERSION }}"
+          fi
+
+
   apiserver-unit-tests:
     runs-on: aliyun
-    needs: detect-noop
+    needs: [ detect-noop,set-k8s-matrix ]
     if: needs.detect-noop.outputs.noop != 'true'
+    strategy:
+      matrix:
+        k8s-version: ${{ fromJson(needs.set-k8s-matrix.outputs.matrix) }}
 
     steps:
       - name: Set up Go
@@ -65,7 +87,7 @@ jobs:
       - name: Setup Kind Cluster (Worker)
         run: |
           kind delete cluster --name worker
-          kind create cluster --image kindest/node:v1.18.15@sha256:5c1b980c4d0e0e8e7eb9f36f7df525d079a96169c8a8f20d8bd108c0d0889cc4 --name worker
+          kind create cluster --image kindest/node:${{ matrix.k8s-version }} --name worker
           kubectl version
           kubectl cluster-info
           kind get kubeconfig --name worker --internal > /tmp/worker.kubeconfig
@@ -74,9 +96,12 @@ jobs:
       - name: Setup Kind Cluster (Hub)
         run: |
           kind delete cluster
-          kind create cluster --image kindest/node:v1.18.15@sha256:5c1b980c4d0e0e8e7eb9f36f7df525d079a96169c8a8f20d8bd108c0d0889cc4
+          kind create cluster --image kindest/node:${{ matrix.k8s-version }}
           kubectl version
           kubectl cluster-info
+      
+      - name: Run api server unit test
+        run: make unit-test-apiserver
 
       - name: Load Image to kind cluster
         run: make kind-load
@@ -92,10 +117,7 @@ jobs:
           kubectl wait --for=condition=Ready pod -l app=source-controller -n flux-system --timeout=600s
           kubectl wait --for=condition=Ready pod -l app=helm-controller -n flux-system --timeout=600s
 
-      - name: Run apiserver unit test
-        run: make unit-test-apiserver
-
-      - name: Run apiserver e2e test
+      - name: Run api server e2e test
         run: |
           export ALIYUN_ACCESS_KEY_ID=${{ secrets.ALIYUN_ACCESS_KEY_ID }}
           export ALIYUN_ACCESS_KEY_SECRET=${{ secrets.ALIYUN_ACCESS_KEY_SECRET }}

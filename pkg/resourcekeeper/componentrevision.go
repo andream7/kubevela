@@ -24,6 +24,7 @@ import (
 	errors2 "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
+	"github.com/oam-dev/kubevela/apis/core.oam.dev/common"
 	"github.com/oam-dev/kubevela/pkg/multicluster"
 	"github.com/oam-dev/kubevela/pkg/oam"
 	"github.com/oam-dev/kubevela/pkg/resourcetracker"
@@ -31,6 +32,8 @@ import (
 
 // DispatchComponentRevision create component revision (also add record in resourcetracker)
 func (h *resourceKeeper) DispatchComponentRevision(ctx context.Context, cr *v1.ControllerRevision) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	rt, err := h.getComponentRevisionRT(ctx)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get resourcetracker")
@@ -39,7 +42,7 @@ func (h *resourceKeeper) DispatchComponentRevision(ctx context.Context, cr *v1.C
 	obj.SetName(cr.Name)
 	obj.SetNamespace(cr.Namespace)
 	obj.SetLabels(cr.Labels)
-	if err = resourcetracker.RecordManifestsInResourceTracker(multicluster.ContextInLocalCluster(ctx), h.Client, rt, []*unstructured.Unstructured{obj}, true); err != nil {
+	if err = resourcetracker.RecordManifestsInResourceTracker(multicluster.ContextInLocalCluster(ctx), h.Client, rt, []*unstructured.Unstructured{obj}, true, common.WorkflowResourceCreator); err != nil {
 		return errors.Wrapf(err, "failed to record componentrevision %s/%s/%s", oam.GetCluster(cr), cr.Namespace, cr.Name)
 	}
 	if err = h.Client.Create(multicluster.ContextWithClusterName(ctx, oam.GetCluster(cr)), cr); err != nil {
@@ -50,6 +53,8 @@ func (h *resourceKeeper) DispatchComponentRevision(ctx context.Context, cr *v1.C
 
 // DeleteComponentRevision delete component revision (also remove record in resourcetracker)
 func (h *resourceKeeper) DeleteComponentRevision(ctx context.Context, cr *v1.ControllerRevision) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	rt, err := h.getComponentRevisionRT(ctx)
 	if err != nil {
 		return errors.Wrapf(err, "failed to get resourcetracker")

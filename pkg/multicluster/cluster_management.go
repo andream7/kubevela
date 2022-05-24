@@ -37,6 +37,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	clusterv1alpha1 "github.com/oam-dev/cluster-gateway/pkg/apis/cluster/v1alpha1"
+	clustercommon "github.com/oam-dev/cluster-gateway/pkg/common"
 
 	"github.com/oam-dev/kubevela/apis/core.oam.dev/v1beta1"
 	"github.com/oam-dev/kubevela/apis/types"
@@ -106,7 +107,7 @@ func (clusterConfig *KubeClusterConfig) RegisterByVelaSecret(ctx context.Context
 			Name:      clusterConfig.ClusterName,
 			Namespace: ClusterGatewaySecretNamespace,
 			Labels: map[string]string{
-				clusterv1alpha1.LabelKeyClusterCredentialType: string(credentialType),
+				clustercommon.LabelKeyClusterCredentialType: string(credentialType),
 			},
 		},
 		Type: corev1.SecretTypeOpaque,
@@ -449,6 +450,19 @@ func RenameCluster(ctx context.Context, k8sClient client.Client, oldClusterName 
 	return nil
 }
 
+// AliasCluster alias cluster
+func AliasCluster(ctx context.Context, cli client.Client, clusterName string, aliasName string) error {
+	if clusterName == ClusterLocalName {
+		return ErrReservedLocalClusterName
+	}
+	vc, err := GetVirtualCluster(ctx, cli, clusterName)
+	if err != nil {
+		return err
+	}
+	setClusterAlias(vc.Object, aliasName)
+	return cli.Update(ctx, vc.Object)
+}
+
 // ensureClusterNotExists will check the cluster is not existed in control plane
 func ensureClusterNotExists(ctx context.Context, c client.Client, clusterName string) error {
 	_, err := GetVirtualCluster(ctx, c, clusterName)
@@ -483,8 +497,8 @@ func getMutableClusterSecret(ctx context.Context, c client.Client, clusterName s
 		return nil, errors.Wrapf(err, "failed to find target cluster secret %s", clusterName)
 	}
 	labels := clusterSecret.GetLabels()
-	if labels == nil || labels[clusterv1alpha1.LabelKeyClusterCredentialType] == "" {
-		return nil, fmt.Errorf("invalid cluster secret %s: cluster credential type label %s is not set", clusterName, clusterv1alpha1.LabelKeyClusterCredentialType)
+	if labels == nil || labels[clustercommon.LabelKeyClusterCredentialType] == "" {
+		return nil, fmt.Errorf("invalid cluster secret %s: cluster credential type label %s is not set", clusterName, clustercommon.LabelKeyClusterCredentialType)
 	}
 	apps := &v1beta1.ApplicationList{}
 	if err := c.List(ctx, apps); err != nil {

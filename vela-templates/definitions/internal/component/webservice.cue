@@ -175,10 +175,10 @@ template: {
 							parameter.labels
 						}
 						if parameter.addRevisionLabel {
-							"app.oam.dev/appRevision": context.appRevision
+							"app.oam.dev/revision": context.revision
 						}
+						"app.oam.dev/name":      context.appName
 						"app.oam.dev/component": context.name
-						"app.oam.dev/revision":  context.revision
 					}
 					if parameter.annotations != _|_ {
 						annotations: parameter.annotations
@@ -379,7 +379,7 @@ template: {
 		exposeType: *"ClusterIP" | "NodePort" | "LoadBalancer" | "ExternalName"
 
 		// +ignore
-		// +usage=If addRevisionLabel is true, the appRevision label will be added to the underlying pods
+		// +usage=If addRevisionLabel is true, the revision label will be added to the underlying pods
 		addRevisionLabel: *false | bool
 
 		// +usage=Commands to run in the container
@@ -499,6 +499,12 @@ template: {
 
 		// +usage=Instructions for assessing whether the container is in a suitable state to serve traffic.
 		readinessProbe?: #HealthProbe
+
+		// +usage=Specify the hostAliases to add
+		hostAliases?: [...{
+			ip: string
+			hostnames: [...string]
+		}]
 	}
 
 	#HealthProbe: {
@@ -514,7 +520,9 @@ template: {
 			// +usage=The endpoint, relative to the port, to which the HTTP GET request should be directed.
 			path: string
 			// +usage=The TCP socket within the container to which the HTTP GET request should be directed.
-			port: int
+			port:    int
+			host?:   string
+			scheme?: *"HTTP" | string
 			httpHeaders?: [...{
 				name:  string
 				value: string
@@ -541,11 +549,5 @@ template: {
 
 		// +usage=Number of consecutive failures required to determine the container is not alive (liveness probe) or not ready (readiness probe).
 		failureThreshold: *3 | int
-
-		// +usage=Specify the hostAliases to add
-		hostAliases: [...{
-			ip: string
-			hostnames: [...string]
-		}]
 	}
 }

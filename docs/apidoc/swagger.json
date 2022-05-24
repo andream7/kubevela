@@ -85,7 +85,7 @@
 				}
 			}
 		},
-		"/api/v1/addon_registries/{name}": {
+		"/api/v1/addon_registries/{addonRegName}": {
 			"put": {
 				"consumes": [
 					"application/xml",
@@ -112,7 +112,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the addon registry",
-						"name": "name",
+						"name": "addonRegName",
 						"in": "path",
 						"required": true
 					}
@@ -150,7 +150,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the addon registry",
-						"name": "name",
+						"name": "addonRegName",
 						"in": "path",
 						"required": true
 					}
@@ -216,7 +216,7 @@
 				}
 			}
 		},
-		"/api/v1/addons/{name}": {
+		"/api/v1/addons/{addonName}": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -236,6 +236,19 @@
 						"type": "string",
 						"description": "addon name to query detail",
 						"name": "name",
+						"in": "path",
+						"required": true
+					},
+					{
+						"type": "string",
+						"description": "specify addon version to enable",
+						"name": "version",
+						"in": "query"
+					},
+					{
+						"type": "string",
+						"description": "addon name to query detail",
+						"name": "addonName",
 						"in": "path",
 						"required": true
 					},
@@ -262,7 +275,7 @@
 				}
 			}
 		},
-		"/api/v1/addons/{name}/disable": {
+		"/api/v1/addons/{addonName}/disable": {
 			"post": {
 				"consumes": [
 					"application/xml",
@@ -281,7 +294,7 @@
 					{
 						"type": "string",
 						"description": "addon name to enable",
-						"name": "name",
+						"name": "addonName",
 						"in": "path",
 						"required": true
 					},
@@ -308,7 +321,7 @@
 				}
 			}
 		},
-		"/api/v1/addons/{name}/enable": {
+		"/api/v1/addons/{addonName}/enable": {
 			"post": {
 				"consumes": [
 					"application/xml",
@@ -335,7 +348,7 @@
 					{
 						"type": "string",
 						"description": "addon name to enable",
-						"name": "name",
+						"name": "addonName",
 						"in": "path",
 						"required": true
 					}
@@ -356,7 +369,7 @@
 				}
 			}
 		},
-		"/api/v1/addons/{name}/status": {
+		"/api/v1/addons/{addonName}/status": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -375,7 +388,7 @@
 					{
 						"type": "string",
 						"description": "addon name to query status",
-						"name": "name",
+						"name": "addonName",
 						"in": "path",
 						"required": true
 					}
@@ -396,7 +409,7 @@
 				}
 			}
 		},
-		"/api/v1/addons/{name}/update": {
+		"/api/v1/addons/{addonName}/update": {
 			"put": {
 				"consumes": [
 					"application/xml",
@@ -423,7 +436,7 @@
 					{
 						"type": "string",
 						"description": "addon name to update",
-						"name": "name",
+						"name": "addonName",
 						"in": "path",
 						"required": true
 					}
@@ -468,8 +481,14 @@
 					},
 					{
 						"type": "string",
-						"description": "The namespace of the managed cluster",
-						"name": "namespace",
+						"description": "search base on project name",
+						"name": "project",
+						"in": "query"
+					},
+					{
+						"type": "string",
+						"description": "search base on env name",
+						"name": "env",
 						"in": "query"
 					},
 					{
@@ -534,7 +553,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}": {
+		"/api/v1/applications/{appName}": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -553,7 +572,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					}
@@ -591,7 +610,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -637,7 +656,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					}
@@ -658,7 +677,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/compare": {
+		"/api/v1/applications/{appName}/compare": {
 			"post": {
 				"consumes": [
 					"application/xml",
@@ -677,7 +696,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					}
@@ -698,7 +717,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/components": {
+		"/api/v1/applications/{appName}/components": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -717,7 +736,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -761,7 +780,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -790,7 +809,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/components/{compName}": {
+		"/api/v1/applications/{appName}/components/{compName}": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -809,7 +828,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -854,7 +873,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -907,7 +926,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -941,7 +960,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/components/{compName}/traits": {
+		"/api/v1/applications/{appName}/components/{compName}/traits": {
 			"post": {
 				"consumes": [
 					"application/xml",
@@ -960,7 +979,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -996,7 +1015,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/components/{compName}/traits/{traitType}": {
+		"/api/v1/applications/{appName}/components/{compName}/traits/{traitType}": {
 			"put": {
 				"consumes": [
 					"application/xml",
@@ -1015,7 +1034,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -1075,7 +1094,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -1110,7 +1129,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/deploy": {
+		"/api/v1/applications/{appName}/deploy": {
 			"post": {
 				"consumes": [
 					"application/xml",
@@ -1129,7 +1148,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -1158,7 +1177,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/dry-run": {
+		"/api/v1/applications/{appName}/dry-run": {
 			"post": {
 				"consumes": [
 					"application/xml",
@@ -1177,7 +1196,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					}
@@ -1198,7 +1217,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/envs": {
+		"/api/v1/applications/{appName}/envs": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -1217,7 +1236,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					}
@@ -1255,7 +1274,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -1284,7 +1303,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/envs/{envName}": {
+		"/api/v1/applications/{appName}/envs/{envName}": {
 			"put": {
 				"consumes": [
 					"application/xml",
@@ -1303,7 +1322,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -1356,7 +1375,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -1384,7 +1403,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/envs/{envName}/recycle": {
+		"/api/v1/applications/{appName}/envs/{envName}/recycle": {
 			"post": {
 				"consumes": [
 					"application/xml",
@@ -1403,7 +1422,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -1431,7 +1450,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/envs/{envName}/status": {
+		"/api/v1/applications/{appName}/envs/{envName}/status": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -1450,7 +1469,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -1478,7 +1497,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/policies": {
+		"/api/v1/applications/{appName}/policies": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -1497,7 +1516,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					}
@@ -1535,7 +1554,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -1564,7 +1583,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/policies/{policyName}": {
+		"/api/v1/applications/{appName}/policies/{policyName}": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -1583,7 +1602,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -1628,7 +1647,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -1681,7 +1700,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -1709,7 +1728,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/records": {
+		"/api/v1/applications/{appName}/records": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -1728,7 +1747,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application.",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					}
@@ -1746,7 +1765,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/reset": {
+		"/api/v1/applications/{appName}/reset": {
 			"post": {
 				"consumes": [
 					"application/xml",
@@ -1765,7 +1784,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					}
@@ -1786,7 +1805,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/revisions": {
+		"/api/v1/applications/{appName}/revisions": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -1805,7 +1824,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -1850,7 +1869,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/revisions/{revision}": {
+		"/api/v1/applications/{appName}/revisions/{revision}": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -1869,7 +1888,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -1897,7 +1916,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/statistics": {
+		"/api/v1/applications/{appName}/statistics": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -1916,7 +1935,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					}
@@ -1937,7 +1956,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/template": {
+		"/api/v1/applications/{appName}/template": {
 			"post": {
 				"consumes": [
 					"application/xml",
@@ -1956,7 +1975,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -1985,7 +2004,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/triggers": {
+		"/api/v1/applications/{appName}/triggers": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -2004,7 +2023,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					}
@@ -2042,7 +2061,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -2071,7 +2090,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/triggers/{token}": {
+		"/api/v1/applications/{appName}/triggers/{token}": {
 			"delete": {
 				"consumes": [
 					"application/xml",
@@ -2090,7 +2109,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -2118,7 +2137,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/workflows": {
+		"/api/v1/applications/{appName}/workflows": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -2137,7 +2156,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application.",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					}
@@ -2180,7 +2199,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application.",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					}
@@ -2204,7 +2223,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/workflows/{workflowName}": {
+		"/api/v1/applications/{appName}/workflows/{workflowName}": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -2223,7 +2242,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application.",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -2265,7 +2284,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application.",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -2315,7 +2334,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application.",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -2340,7 +2359,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/workflows/{workflowName}/records": {
+		"/api/v1/applications/{appName}/workflows/{workflowName}/records": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -2359,7 +2378,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application.",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -2396,7 +2415,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/workflows/{workflowName}/records/{record}": {
+		"/api/v1/applications/{appName}/workflows/{workflowName}/records/{record}": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -2415,7 +2434,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application.",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -2447,7 +2466,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/workflows/{workflowName}/records/{record}/resume": {
+		"/api/v1/applications/{appName}/workflows/{workflowName}/records/{record}/resume": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -2466,7 +2485,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application.",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -2498,7 +2517,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/workflows/{workflowName}/records/{record}/rollback": {
+		"/api/v1/applications/{appName}/workflows/{workflowName}/records/{record}/rollback": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -2517,7 +2536,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application.",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -2555,7 +2574,7 @@
 				}
 			}
 		},
-		"/api/v1/applications/{name}/workflows/{workflowName}/records/{record}/terminate": {
+		"/api/v1/applications/{appName}/workflows/{workflowName}/records/{record}/terminate": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -2574,7 +2593,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application.",
-						"name": "name",
+						"name": "appName",
 						"in": "path",
 						"required": true
 					},
@@ -2606,7 +2625,7 @@
 				}
 			}
 		},
-		"/api/v1/auth/dexConfig": {
+		"/api/v1/auth/dex_config": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -2674,7 +2693,7 @@
 				}
 			}
 		},
-		"/api/v1/auth/loginType": {
+		"/api/v1/auth/login_type": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -2703,7 +2722,7 @@
 				}
 			}
 		},
-		"/api/v1/auth/refreshToken": {
+		"/api/v1/auth/refresh_token": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -2722,6 +2741,35 @@
 					"200": {
 						"schema": {
 							"$ref": "#/definitions/v1.RefreshTokenResponse"
+						}
+					},
+					"400": {
+						"schema": {
+							"$ref": "#/definitions/bcode.Bcode"
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/auth/user_info": {
+			"get": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"authentication"
+				],
+				"summary": "get login user detail info",
+				"operationId": "getLoginUserInfo",
+				"responses": {
+					"200": {
+						"schema": {
+							"$ref": "#/definitions/v1.LoginUserInfoResponse"
 						}
 					},
 					"400": {
@@ -3289,6 +3337,284 @@
 				}
 			}
 		},
+		"/api/v1/config_types": {
+			"get": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"config"
+				],
+				"summary": "list all config types",
+				"operationId": "listConfigTypes",
+				"parameters": [
+					{
+						"type": "string",
+						"description": "Fuzzy search based on name and description.",
+						"name": "query",
+						"in": "query"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"type": "array",
+							"items": {
+								"$ref": "#/definitions/v1.ConfigType"
+							}
+						}
+					},
+					"400": {
+						"description": "Bad Request",
+						"schema": {
+							"$ref": "#/definitions/bcode.Bcode"
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/config_types/{configType}": {
+			"get": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"config"
+				],
+				"summary": "get a config type",
+				"operationId": "getConfigType",
+				"parameters": [
+					{
+						"type": "string",
+						"description": "identifier of the config type",
+						"name": "configType",
+						"in": "path",
+						"required": true
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.ConfigType"
+						}
+					},
+					"400": {
+						"description": "Bad Request",
+						"schema": {
+							"$ref": "#/definitions/bcode.Bcode"
+						}
+					}
+				}
+			},
+			"post": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"config"
+				],
+				"summary": "create or update a config",
+				"operationId": "createConfig",
+				"parameters": [
+					{
+						"type": "string",
+						"description": "identifier of the config type",
+						"name": "configType",
+						"in": "path",
+						"required": true
+					},
+					{
+						"name": "body",
+						"in": "body",
+						"required": true,
+						"schema": {
+							"$ref": "#/definitions/v1.CreateConfigRequest"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.EmptyResponse"
+						}
+					},
+					"400": {
+						"description": "Bad Request",
+						"schema": {
+							"$ref": "#/definitions/bcode.Bcode"
+						}
+					},
+					"404": {
+						"description": "Not Found",
+						"schema": {
+							"$ref": "#/definitions/bcode.Bcode"
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/config_types/{configType}/configs": {
+			"get": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"config"
+				],
+				"summary": "get configs from a config type",
+				"operationId": "getConfigs",
+				"parameters": [
+					{
+						"type": "string",
+						"description": "identifier of the config",
+						"name": "configType",
+						"in": "path",
+						"required": true
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"type": "array",
+							"items": {
+								"$ref": "#/definitions/*v1.Config"
+							}
+						}
+					},
+					"400": {
+						"description": "Bad Request",
+						"schema": {
+							"$ref": "#/definitions/bcode.Bcode"
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/config_types/{configType}/configs/{name}": {
+			"get": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"config"
+				],
+				"summary": "get a config from a config type",
+				"operationId": "getConfig",
+				"parameters": [
+					{
+						"type": "string",
+						"description": "identifier of the config type",
+						"name": "configType",
+						"in": "path",
+						"required": true
+					},
+					{
+						"type": "string",
+						"description": "identifier of the config",
+						"name": "name",
+						"in": "path",
+						"required": true
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"type": "array",
+							"items": {
+								"$ref": "#/definitions/*v1.Config"
+							}
+						}
+					},
+					"400": {
+						"description": "Bad Request",
+						"schema": {
+							"$ref": "#/definitions/bcode.Bcode"
+						}
+					}
+				}
+			},
+			"delete": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"config"
+				],
+				"summary": "delete a config",
+				"operationId": "deleteConfig",
+				"parameters": [
+					{
+						"type": "string",
+						"description": "identifier of the config type",
+						"name": "configType",
+						"in": "path",
+						"required": true
+					},
+					{
+						"type": "string",
+						"description": "identifier of the config",
+						"name": "name",
+						"in": "path",
+						"required": true
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.EmptyResponse"
+						}
+					},
+					"400": {
+						"description": "Bad Request",
+						"schema": {
+							"$ref": "#/definitions/bcode.Bcode"
+						}
+					},
+					"404": {
+						"description": "Not Found",
+						"schema": {
+							"$ref": "#/definitions/bcode.Bcode"
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/definitions": {
 			"get": {
 				"consumes": [
@@ -3318,14 +3644,15 @@
 						"required": true
 					},
 					{
-						"type": "string",
-						"description": "if specified, query the definition supported by the env.",
-						"name": "envName",
+						"type": "boolean",
+						"default": false,
+						"description": "query all definitions include hidden in UI",
+						"name": "queryAll",
 						"in": "query"
 					},
 					{
 						"type": "string",
-						"description": "if specified, query the trait definition applied to the workload.",
+						"description": "if specified, query the trait definition applied to the workload",
 						"name": "appliedWorkload",
 						"in": "query"
 					}
@@ -3343,7 +3670,7 @@
 				}
 			}
 		},
-		"/api/v1/definitions/{name}": {
+		"/api/v1/definitions/{definitionName}": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -3356,13 +3683,13 @@
 				"tags": [
 					"definition"
 				],
-				"summary": "detail definition",
+				"summary": "Detail a definition",
 				"operationId": "detailDefinition",
 				"parameters": [
 					{
 						"type": "string",
 						"description": "identifier of the definition",
-						"name": "name",
+						"name": "definitionName",
 						"in": "path",
 						"required": true
 					},
@@ -3371,6 +3698,82 @@
 						"description": "query the definition type",
 						"name": "type",
 						"in": "query"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.SimpleResponse"
+						}
+					},
+					"500": {
+						"description": "Bummer, something went wrong"
+					}
+				}
+			}
+		},
+		"/api/v1/definitions/{definitionName}/status": {
+			"put": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"definition"
+				],
+				"summary": "Update the status for a definition",
+				"operationId": "updateDefinitionStatus",
+				"parameters": [
+					{
+						"name": "body",
+						"in": "body",
+						"required": true,
+						"schema": {
+							"$ref": "#/definitions/v1.UpdateDefinitionStatusRequest"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.SimpleResponse"
+						}
+					},
+					"500": {
+						"description": "Bummer, something went wrong"
+					}
+				}
+			}
+		},
+		"/api/v1/definitions/{definitionName}/uischema": {
+			"put": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"definition"
+				],
+				"summary": "Update the UI schema for a definition",
+				"operationId": "updateUISchema",
+				"parameters": [
+					{
+						"name": "body",
+						"in": "body",
+						"required": true,
+						"schema": {
+							"$ref": "#/definitions/v1.UpdateUISchemaRequest"
+						}
 					}
 				],
 				"responses": {
@@ -3399,7 +3802,7 @@
 				"tags": [
 					"addon"
 				],
-				"summary": "list all addons",
+				"summary": "list all enabled addons",
 				"operationId": "list",
 				"parameters": [
 					{
@@ -3419,7 +3822,7 @@
 					"200": {
 						"description": "OK",
 						"schema": {
-							"$ref": "#/definitions/v1.ListAddonResponse"
+							"$ref": "#/definitions/v1.ListEnabledAddonResponse"
 						}
 					},
 					"400": {
@@ -3489,7 +3892,7 @@
 				}
 			}
 		},
-		"/api/v1/envs/{name}": {
+		"/api/v1/envs/{envName}": {
 			"put": {
 				"consumes": [
 					"application/xml",
@@ -3508,7 +3911,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "envName",
 						"in": "path",
 						"required": true
 					},
@@ -3548,7 +3951,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the application ",
-						"name": "name",
+						"name": "envName",
 						"in": "path",
 						"required": true
 					}
@@ -3597,7 +4000,7 @@
 				}
 			}
 		},
-		"/api/v1/policy_definitions": {
+		"/api/v1/permissions": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -3608,15 +4011,18 @@
 					"application/xml"
 				],
 				"tags": [
-					"definition"
+					"rbac"
 				],
-				"summary": "list all policydefinition",
-				"operationId": "noop",
+				"summary": "list all project level perm policies",
+				"operationId": "listPlatformPermissions",
 				"responses": {
 					"200": {
 						"description": "OK",
 						"schema": {
-							"$ref": "#/definitions/v1.ListPolicyDefinitionResponse"
+							"type": "array",
+							"items": {
+								"$ref": "#/definitions/v1.PermissionBase"
+							}
 						}
 					}
 				}
@@ -3680,6 +4086,613 @@
 				}
 			}
 		},
+		"/api/v1/projects/{projectName}": {
+			"get": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"project"
+				],
+				"summary": "detail a project",
+				"operationId": "detailProject",
+				"parameters": [
+					{
+						"type": "string",
+						"description": "identifier of the project",
+						"name": "projectName",
+						"in": "path",
+						"required": true
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.ProjectBase"
+						}
+					}
+				}
+			},
+			"put": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"project"
+				],
+				"summary": "update a project",
+				"operationId": "updateProject",
+				"parameters": [
+					{
+						"type": "string",
+						"description": "identifier of the project",
+						"name": "projectName",
+						"in": "path",
+						"required": true
+					},
+					{
+						"name": "body",
+						"in": "body",
+						"required": true,
+						"schema": {
+							"$ref": "#/definitions/v1.UpdateProjectRequest"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.ProjectBase"
+						}
+					}
+				}
+			},
+			"delete": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"project"
+				],
+				"summary": "delete a project",
+				"operationId": "deleteProject",
+				"parameters": [
+					{
+						"type": "string",
+						"description": "identifier of the project",
+						"name": "projectName",
+						"in": "path",
+						"required": true
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.EmptyResponse"
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{projectName}/configs": {
+			"get": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"project"
+				],
+				"summary": "get configs which are in a project",
+				"operationId": "getConfigs",
+				"parameters": [
+					{
+						"type": "string",
+						"description": "config type",
+						"name": "configType",
+						"in": "query"
+					},
+					{
+						"type": "string",
+						"description": "identifier of the project",
+						"name": "projectName",
+						"in": "path",
+						"required": true
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"type": "array",
+							"items": {
+								"$ref": "#/definitions/*v1.Config"
+							}
+						}
+					},
+					"400": {
+						"description": "Bad Request",
+						"schema": {
+							"$ref": "#/definitions/bcode.Bcode"
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{projectName}/permissions": {
+			"get": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"project"
+				],
+				"summary": "list all project level perm policies",
+				"operationId": "listProjectPermissions",
+				"parameters": [
+					{
+						"type": "string",
+						"description": "identifier of the project",
+						"name": "projectName",
+						"in": "path",
+						"required": true
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"type": "array",
+							"items": {
+								"$ref": "#/definitions/v1.PermissionBase"
+							}
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{projectName}/roles": {
+			"get": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"project"
+				],
+				"summary": "list all project level roles",
+				"operationId": "listProjectRoles",
+				"parameters": [
+					{
+						"type": "string",
+						"description": "identifier of the project",
+						"name": "projectName",
+						"in": "path",
+						"required": true
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.ListRolesResponse"
+						}
+					}
+				}
+			},
+			"post": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"project"
+				],
+				"summary": "create project level role",
+				"operationId": "createProjectRole",
+				"parameters": [
+					{
+						"type": "string",
+						"description": "identifier of the project",
+						"name": "projectName",
+						"in": "path",
+						"required": true
+					},
+					{
+						"name": "body",
+						"in": "body",
+						"required": true,
+						"schema": {
+							"$ref": "#/definitions/v1.CreateRoleRequest"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.RoleBase"
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{projectName}/roles/{roleName}": {
+			"put": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"project"
+				],
+				"summary": "update project level role",
+				"operationId": "updateProjectRole",
+				"parameters": [
+					{
+						"type": "string",
+						"description": "identifier of the project",
+						"name": "projectName",
+						"in": "path",
+						"required": true
+					},
+					{
+						"type": "string",
+						"description": "identifier of the project role",
+						"name": "roleName",
+						"in": "path",
+						"required": true
+					},
+					{
+						"name": "body",
+						"in": "body",
+						"required": true,
+						"schema": {
+							"$ref": "#/definitions/v1.UpdateRoleRequest"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.RoleBase"
+						}
+					}
+				}
+			},
+			"delete": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"project"
+				],
+				"summary": "delete project level role",
+				"operationId": "deleteProjectRole",
+				"parameters": [
+					{
+						"type": "string",
+						"description": "identifier of the project",
+						"name": "projectName",
+						"in": "path",
+						"required": true
+					},
+					{
+						"type": "string",
+						"description": "identifier of the project role",
+						"name": "roleName",
+						"in": "path",
+						"required": true
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.EmptyResponse"
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{projectName}/targets": {
+			"get": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"project"
+				],
+				"summary": "get targets list belong to a project",
+				"operationId": "listProjectTargets",
+				"parameters": [
+					{
+						"type": "string",
+						"description": "identifier of the project",
+						"name": "projectName",
+						"in": "path",
+						"required": true
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.EmptyResponse"
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{projectName}/users": {
+			"get": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"project"
+				],
+				"summary": "list all users belong to a project",
+				"operationId": "listProjectUser",
+				"parameters": [
+					{
+						"type": "string",
+						"description": "identifier of the project",
+						"name": "projectName",
+						"in": "path",
+						"required": true
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.ListProjectUsersResponse"
+						}
+					}
+				}
+			},
+			"post": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"project"
+				],
+				"summary": "add a user to a project",
+				"operationId": "createProjectUser",
+				"parameters": [
+					{
+						"type": "string",
+						"description": "identifier of the project",
+						"name": "projectName",
+						"in": "path",
+						"required": true
+					},
+					{
+						"name": "body",
+						"in": "body",
+						"required": true,
+						"schema": {
+							"$ref": "#/definitions/v1.AddProjectUserRequest"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.ProjectUserBase"
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{projectName}/users/{userName}": {
+			"put": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"project"
+				],
+				"summary": "add a user to a project",
+				"operationId": "updateProjectUser",
+				"parameters": [
+					{
+						"name": "body",
+						"in": "body",
+						"required": true,
+						"schema": {
+							"$ref": "#/definitions/v1.UpdateProjectUserRequest"
+						}
+					},
+					{
+						"type": "string",
+						"description": "identifier of the project",
+						"name": "projectName",
+						"in": "path",
+						"required": true
+					},
+					{
+						"type": "string",
+						"description": "identifier of the project user",
+						"name": "userName",
+						"in": "path",
+						"required": true
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.ProjectUserBase"
+						}
+					}
+				}
+			},
+			"delete": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"project"
+				],
+				"summary": "delete a user from a project",
+				"operationId": "deleteProjectUser",
+				"parameters": [
+					{
+						"name": "body",
+						"in": "body",
+						"required": true,
+						"schema": {
+							"$ref": "#/definitions/v1.UpdateProjectUserRequest"
+						}
+					},
+					{
+						"type": "string",
+						"description": "identifier of the project",
+						"name": "projectName",
+						"in": "path",
+						"required": true
+					},
+					{
+						"type": "string",
+						"description": "identifier of the project user",
+						"name": "userName",
+						"in": "path",
+						"required": true
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.EmptyResponse"
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/projects/{projectName}/validate_image": {
+			"get": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"project"
+				],
+				"summary": "validate an image in a project",
+				"operationId": "validateImage",
+				"parameters": [
+					{
+						"type": "string",
+						"description": "image name",
+						"name": "image",
+						"in": "query"
+					},
+					{
+						"type": "string",
+						"description": "identifier of the project",
+						"name": "projectName",
+						"in": "path",
+						"required": true
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"type": "array",
+							"items": {
+								"$ref": "#/definitions/*v1.ImageResponse"
+							}
+						}
+					},
+					"400": {
+						"description": "Bad Request",
+						"schema": {
+							"$ref": "#/definitions/bcode.Bcode"
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/query": {
 			"get": {
 				"consumes": [
@@ -3719,6 +4732,49 @@
 				}
 			}
 		},
+		"/api/v1/repository/chart_repos": {
+			"get": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"repository",
+					"helm"
+				],
+				"summary": "list chart repo",
+				"operationId": "listRepo",
+				"parameters": [
+					{
+						"type": "string",
+						"description": "the config project",
+						"name": "project",
+						"in": "query"
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"type": "array",
+							"items": {
+								"type": "string"
+							}
+						}
+					},
+					"400": {
+						"description": "Bad Request",
+						"schema": {
+							"$ref": "#/definitions/bcode.Bcode"
+						}
+					}
+				}
+			}
+		},
 		"/api/v1/repository/charts": {
 			"get": {
 				"consumes": [
@@ -3740,6 +4796,12 @@
 						"type": "string",
 						"description": "helm repository url",
 						"name": "repoUrl",
+						"in": "query"
+					},
+					{
+						"type": "string",
+						"description": "secret of the repo",
+						"name": "secretName",
 						"in": "query"
 					}
 				],
@@ -3784,6 +4846,12 @@
 						"description": "helm repository url",
 						"name": "repoUrl",
 						"in": "query"
+					},
+					{
+						"type": "string",
+						"description": "secret of the repo",
+						"name": "secretName",
+						"in": "query"
 					}
 				],
 				"responses": {
@@ -3824,6 +4892,12 @@
 						"description": "helm repository url",
 						"name": "repoUrl",
 						"in": "query"
+					},
+					{
+						"type": "string",
+						"description": "secret of the repo",
+						"name": "secretName",
+						"in": "query"
 					}
 				],
 				"responses": {
@@ -3837,6 +4911,122 @@
 						"description": "Bad Request",
 						"schema": {
 							"$ref": "#/definitions/bcode.Bcode"
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/roles": {
+			"get": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"rbac"
+				],
+				"summary": "list all platform level roles",
+				"operationId": "listPlatformRoles",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.ListRolesResponse"
+						}
+					}
+				}
+			},
+			"post": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"rbac"
+				],
+				"summary": "create platform level role",
+				"operationId": "createPlatformRole",
+				"parameters": [
+					{
+						"name": "body",
+						"in": "body",
+						"required": true,
+						"schema": {
+							"$ref": "#/definitions/v1.CreateRoleRequest"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.RoleBase"
+						}
+					}
+				}
+			}
+		},
+		"/api/v1/roles/{roleName}": {
+			"put": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"rbac"
+				],
+				"summary": "update platform level role",
+				"operationId": "updatePlatformRole",
+				"parameters": [
+					{
+						"name": "body",
+						"in": "body",
+						"required": true,
+						"schema": {
+							"$ref": "#/definitions/v1.UpdateRoleRequest"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.RoleBase"
+						}
+					}
+				}
+			},
+			"delete": {
+				"consumes": [
+					"application/xml",
+					"application/json"
+				],
+				"produces": [
+					"application/json",
+					"application/xml"
+				],
+				"tags": [
+					"rbac"
+				],
+				"summary": "update platform level role",
+				"operationId": "deletePlatformRole",
+				"responses": {
+					"200": {
+						"description": "OK",
+						"schema": {
+							"$ref": "#/definitions/v1.EmptyResponse"
 						}
 					}
 				}
@@ -3908,34 +5098,6 @@
 						}
 					}
 				}
-			},
-			"delete": {
-				"consumes": [
-					"application/xml",
-					"application/json"
-				],
-				"produces": [
-					"application/json",
-					"application/xml"
-				],
-				"tags": [
-					"systemInfo"
-				],
-				"operationId": "deleteSystemInfo",
-				"responses": {
-					"200": {
-						"description": "OK",
-						"schema": {
-							"$ref": "#/definitions/v1.SystemInfoResponse"
-						}
-					},
-					"400": {
-						"description": "Bad Request",
-						"schema": {
-							"$ref": "#/definitions/bcode.Bcode"
-						}
-					}
-				}
 			}
 		},
 		"/api/v1/targets": {
@@ -3964,6 +5126,12 @@
 						"type": "integer",
 						"description": "PageSize for paging",
 						"name": "pageSize",
+						"in": "query"
+					},
+					{
+						"type": "string",
+						"description": "list targets by project name",
+						"name": "project",
 						"in": "query"
 					}
 				],
@@ -4022,7 +5190,7 @@
 				}
 			}
 		},
-		"/api/v1/targets/{name}": {
+		"/api/v1/targets/{targetName}": {
 			"get": {
 				"consumes": [
 					"application/xml",
@@ -4041,7 +5209,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the Target.",
-						"name": "name",
+						"name": "targetName",
 						"in": "path",
 						"required": true
 					}
@@ -4076,7 +5244,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the Target",
-						"name": "name",
+						"name": "targetName",
 						"in": "path",
 						"required": true
 					},
@@ -4119,7 +5287,7 @@
 					{
 						"type": "string",
 						"description": "identifier of the Target",
-						"name": "name",
+						"name": "targetName",
 						"in": "path",
 						"required": true
 					}
@@ -4562,7 +5730,9 @@
 	},
 	"definitions": {
 		"*v1.ApplicationTriggerBase": {},
+		"*v1.Config": {},
 		"*v1.EmptyResponse": {},
+		"*v1.ImageResponse": {},
 		"addon.Dependency": {
 			"properties": {
 				"name": {
@@ -4610,6 +5780,35 @@
 					"type": "string"
 				},
 				"url": {
+					"type": "string"
+				}
+			}
+		},
+		"addon.GitlabAddonSource": {
+			"properties": {
+				"path": {
+					"type": "string"
+				},
+				"repo": {
+					"type": "string"
+				},
+				"token": {
+					"type": "string"
+				},
+				"url": {
+					"type": "string"
+				}
+			}
+		},
+		"addon.HelmSource": {
+			"properties": {
+				"password": {
+					"type": "string"
+				},
+				"url": {
+					"type": "string"
+				},
+				"username": {
 					"type": "string"
 				}
 			}
@@ -5337,6 +6536,9 @@
 				"suspend": {
 					"type": "boolean"
 				},
+				"suspendState": {
+					"type": "string"
+				},
 				"terminated": {
 					"type": "boolean"
 				}
@@ -5576,13 +6778,16 @@
 				"updateTime": {
 					"type": "string",
 					"format": "date-time"
+				},
+				"workloadType": {
+					"$ref": "#/definitions/common.WorkloadTypeDescriptor"
 				}
 			}
 		},
 		"model.ApplicationRevision": {
 			"required": [
-				"updateTime",
 				"createTime",
+				"updateTime",
 				"appPrimaryKey",
 				"version",
 				"status",
@@ -5876,34 +7081,6 @@
 				}
 			}
 		},
-		"model.SystemInfo": {
-			"required": [
-				"updateTime",
-				"createTime",
-				"installID",
-				"enableCollection",
-				"loginType"
-			],
-			"properties": {
-				"createTime": {
-					"type": "string",
-					"format": "date-time"
-				},
-				"enableCollection": {
-					"type": "boolean"
-				},
-				"installID": {
-					"type": "string"
-				},
-				"loginType": {
-					"type": "string"
-				},
-				"updateTime": {
-					"type": "string",
-					"format": "date-time"
-				}
-			}
-		},
 		"model.WorkflowStepStatus": {
 			"required": [
 				"id",
@@ -5981,42 +7158,6 @@
 				}
 			}
 		},
-		"types.Parameter": {
-			"required": [
-				"name"
-			],
-			"properties": {
-				"alias": {
-					"type": "string"
-				},
-				"default": {
-					"$ref": "#/definitions/types.Parameter.default"
-				},
-				"ignore": {
-					"type": "boolean"
-				},
-				"jsonType": {
-					"type": "string"
-				},
-				"name": {
-					"type": "string"
-				},
-				"required": {
-					"type": "boolean"
-				},
-				"short": {
-					"type": "string"
-				},
-				"type": {
-					"type": "integer",
-					"format": "int32"
-				},
-				"usage": {
-					"type": "string"
-				}
-			}
-		},
-		"types.Parameter.default": {},
 		"types.Reference": {
 			"required": [
 				"name"
@@ -6223,6 +7364,23 @@
 				}
 			}
 		},
+		"v1.AddProjectUserRequest": {
+			"required": [
+				"userName",
+				"userRoles"
+			],
+			"properties": {
+				"userName": {
+					"type": "string"
+				},
+				"userRoles": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				}
+			}
+		},
 		"v1.AddonBaseStatus": {
 			"required": [
 				"name",
@@ -6275,6 +7433,12 @@
 				"gitee": {
 					"$ref": "#/definitions/addon.GiteeAddonSource"
 				},
+				"gitlab": {
+					"$ref": "#/definitions/addon.GitlabAddonSource"
+				},
+				"helm": {
+					"$ref": "#/definitions/addon.HelmSource"
+				},
 				"name": {
 					"type": "string"
 				},
@@ -6290,6 +7454,12 @@
 				"args"
 			],
 			"properties": {
+				"allClusters": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/v1.NameAlias"
+					}
+				},
 				"appStatus": {
 					"$ref": "#/definitions/common.AppStatus"
 				},
@@ -6304,6 +7474,9 @@
 				},
 				"enabling_progress": {
 					"$ref": "#/definitions/v1.EnablingProgress"
+				},
+				"installedVersion": {
+					"type": "string"
 				},
 				"name": {
 					"type": "string"
@@ -6433,12 +7606,12 @@
 		},
 		"v1.ApplicationDeployResponse": {
 			"required": [
-				"status",
 				"note",
+				"envName",
 				"triggerType",
 				"createTime",
 				"version",
-				"envName"
+				"status"
 			],
 			"properties": {
 				"codeInfo": {
@@ -6449,7 +7622,7 @@
 					"format": "date-time"
 				},
 				"deployUser": {
-					"type": "string"
+					"$ref": "#/definitions/v1.NameAlias"
 				},
 				"envName": {
 					"type": "string"
@@ -6547,7 +7720,7 @@
 					"format": "date-time"
 				},
 				"deployUser": {
-					"type": "string"
+					"$ref": "#/definitions/v1.NameAlias"
 				},
 				"envName": {
 					"type": "string"
@@ -6943,6 +8116,9 @@
 				"updateTime": {
 					"type": "string",
 					"format": "date-time"
+				},
+				"workloadType": {
+					"$ref": "#/definitions/common.WorkloadTypeDescriptor"
 				}
 			}
 		},
@@ -6969,6 +8145,31 @@
 					"items": {
 						"type": "string"
 					}
+				}
+			}
+		},
+		"v1.ConfigType": {
+			"required": [
+				"definitions",
+				"alias",
+				"name",
+				"description"
+			],
+			"properties": {
+				"alias": {
+					"type": "string"
+				},
+				"definitions": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"description": {
+					"type": "string"
+				},
+				"name": {
+					"type": "string"
 				}
 			}
 		},
@@ -7020,6 +8221,12 @@
 				},
 				"gitee": {
 					"$ref": "#/definitions/addon.GiteeAddonSource"
+				},
+				"gitlab": {
+					"$ref": "#/definitions/addon.GitlabAddonSource"
+				},
+				"helm": {
+					"$ref": "#/definitions/addon.HelmSource"
 				},
 				"name": {
 					"type": "string"
@@ -7314,6 +8521,35 @@
 				}
 			}
 		},
+		"v1.CreateConfigRequest": {
+			"required": [
+				"name",
+				"alias",
+				"description",
+				"project",
+				"componentType"
+			],
+			"properties": {
+				"alias": {
+					"type": "string"
+				},
+				"componentType": {
+					"type": "string"
+				},
+				"description": {
+					"type": "string"
+				},
+				"name": {
+					"type": "string"
+				},
+				"project": {
+					"type": "string"
+				},
+				"properties": {
+					"type": "string"
+				}
+			}
+		},
 		"v1.CreateEnvRequest": {
 			"required": [
 				"name",
@@ -7379,12 +8615,37 @@
 				},
 				"name": {
 					"type": "string"
+				},
+				"owner": {
+					"type": "string"
+				}
+			}
+		},
+		"v1.CreateRoleRequest": {
+			"required": [
+				"name",
+				"alias",
+				"permissions"
+			],
+			"properties": {
+				"alias": {
+					"type": "string"
+				},
+				"name": {
+					"type": "string"
+				},
+				"permissions": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
 				}
 			}
 		},
 		"v1.CreateTargetRequest": {
 			"required": [
-				"name"
+				"name",
+				"project"
 			],
 			"properties": {
 				"alias": {
@@ -7399,6 +8660,9 @@
 				"name": {
 					"type": "string"
 				},
+				"project": {
+					"type": "string"
+				},
 				"variable": {
 					"type": "object"
 				}
@@ -7408,7 +8672,8 @@
 			"required": [
 				"name",
 				"email",
-				"password"
+				"password",
+				"roles"
 			],
 			"properties": {
 				"alias": {
@@ -7422,6 +8687,12 @@
 				},
 				"password": {
 					"type": "string"
+				},
+				"roles": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
 				}
 			}
 		},
@@ -7458,10 +8729,16 @@
 		"v1.DefinitionBase": {
 			"required": [
 				"name",
+				"alias",
 				"description",
-				"icon"
+				"icon",
+				"status",
+				"labels"
 			],
 			"properties": {
+				"alias": {
+					"type": "string"
+				},
 				"component": {
 					"$ref": "#/definitions/v1beta1.ComponentDefinitionSpec"
 				},
@@ -7471,11 +8748,20 @@
 				"icon": {
 					"type": "string"
 				},
+				"labels": {
+					"type": "object",
+					"additionalProperties": {
+						"type": "string"
+					}
+				},
 				"name": {
 					"type": "string"
 				},
 				"policy": {
 					"$ref": "#/definitions/v1beta1.PolicyDefinitionSpec"
+				},
+				"status": {
+					"type": "string"
 				},
 				"trait": {
 					"$ref": "#/definitions/v1beta1.TraitDefinitionSpec"
@@ -7497,9 +8783,16 @@
 				"invisible",
 				"schema",
 				"uiSchema",
-				"definitions"
+				"definitions",
+				"availableVersions"
 			],
 			"properties": {
+				"availableVersions": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
 				"definitions": {
 					"type": "array",
 					"items": {
@@ -7567,23 +8860,19 @@
 		},
 		"v1.DetailApplicationResponse": {
 			"required": [
-				"description",
-				"alias",
 				"project",
+				"description",
 				"createTime",
-				"updateTime",
 				"icon",
+				"alias",
+				"updateTime",
 				"name",
 				"policies",
 				"envBindings",
-				"applicationType",
 				"resourceInfo"
 			],
 			"properties": {
 				"alias": {
-					"type": "string"
-				},
-				"applicationType": {
 					"type": "string"
 				},
 				"createTime": {
@@ -7634,20 +8923,20 @@
 		},
 		"v1.DetailClusterResponse": {
 			"required": [
+				"kubeConfig",
+				"name",
+				"description",
+				"apiServerURL",
+				"status",
 				"reason",
-				"labels",
-				"updateTime",
-				"alias",
 				"icon",
 				"provider",
-				"kubeConfig",
-				"createTime",
-				"description",
-				"name",
-				"apiServerURL",
-				"dashboardURL",
 				"kubeConfigSecret",
-				"status",
+				"labels",
+				"dashboardURL",
+				"createTime",
+				"updateTime",
+				"alias",
 				"resourceInfo"
 			],
 			"properties": {
@@ -7706,13 +8995,13 @@
 		"v1.DetailComponentResponse": {
 			"required": [
 				"alias",
-				"creator",
-				"main",
-				"appPrimaryKey",
+				"updateTime",
 				"name",
 				"type",
+				"main",
 				"createTime",
-				"updateTime",
+				"appPrimaryKey",
+				"creator",
 				"definition"
 			],
 			"properties": {
@@ -7792,35 +9081,81 @@
 				"updateTime": {
 					"type": "string",
 					"format": "date-time"
+				},
+				"workloadType": {
+					"$ref": "#/definitions/common.WorkloadTypeDescriptor"
 				}
 			}
 		},
 		"v1.DetailDefinitionResponse": {
 			"required": [
+				"name",
+				"status",
+				"labels",
+				"alias",
+				"description",
+				"icon",
 				"schema",
 				"uiSchema"
 			],
 			"properties": {
+				"alias": {
+					"type": "string"
+				},
+				"component": {
+					"$ref": "#/definitions/v1beta1.ComponentDefinitionSpec"
+				},
+				"description": {
+					"type": "string"
+				},
+				"icon": {
+					"type": "string"
+				},
+				"labels": {
+					"type": "object",
+					"additionalProperties": {
+						"type": "string"
+					}
+				},
+				"name": {
+					"type": "string"
+				},
+				"policy": {
+					"$ref": "#/definitions/v1beta1.PolicyDefinitionSpec"
+				},
 				"schema": {
 					"type": "string"
+				},
+				"status": {
+					"type": "string"
+				},
+				"trait": {
+					"$ref": "#/definitions/v1beta1.TraitDefinitionSpec"
 				},
 				"uiSchema": {
 					"type": "array",
 					"items": {
 						"$ref": "#/definitions/utils.UIParameter"
 					}
+				},
+				"workflowStep": {
+					"$ref": "#/definitions/v1beta1.WorkflowStepDefinitionSpec"
+				},
+				"workloadType": {
+					"type": "string"
 				}
 			}
 		},
 		"v1.DetailPolicyResponse": {
 			"required": [
+				"creator",
+				"properties",
 				"createTime",
 				"updateTime",
+				"envName",
 				"name",
 				"type",
-				"description",
-				"creator",
-				"properties"
+				"description"
 			],
 			"properties": {
 				"createTime": {
@@ -7831,6 +9166,9 @@
 					"type": "string"
 				},
 				"description": {
+					"type": "string"
+				},
+				"envName": {
 					"type": "string"
 				},
 				"name": {
@@ -7852,14 +9190,14 @@
 			"required": [
 				"updateTime",
 				"note",
+				"triggerType",
+				"reason",
+				"envName",
+				"createTime",
+				"deployUser",
 				"appPrimaryKey",
 				"version",
-				"createTime",
-				"reason",
-				"triggerType",
-				"envName",
 				"status",
-				"deployUser",
 				"workflowName"
 			],
 			"properties": {
@@ -7877,7 +9215,7 @@
 					"format": "date-time"
 				},
 				"deployUser": {
-					"type": "string"
+					"$ref": "#/definitions/v1.NameAlias"
 				},
 				"envName": {
 					"type": "string"
@@ -7914,9 +9252,10 @@
 		},
 		"v1.DetailTargetResponse": {
 			"required": [
+				"name",
 				"createTime",
-				"updateTime",
-				"name"
+				"project",
+				"updateTime"
 			],
 			"properties": {
 				"alias": {
@@ -7942,6 +9281,9 @@
 				"name": {
 					"type": "string"
 				},
+				"project": {
+					"$ref": "#/definitions/v1.NameAlias"
+				},
 				"updateTime": {
 					"type": "string",
 					"format": "date-time"
@@ -7958,7 +9300,8 @@
 				"name",
 				"email",
 				"disabled",
-				"projects"
+				"projects",
+				"roles"
 			],
 			"properties": {
 				"alias": {
@@ -7984,19 +9327,25 @@
 				"projects": {
 					"type": "array",
 					"items": {
-						"$ref": "#/definitions/v1.ProjectUserBase"
+						"$ref": "#/definitions/v1.ProjectBase"
+					}
+				},
+				"roles": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/v1.NameAlias"
 					}
 				}
 			}
 		},
 		"v1.DetailWorkflowRecordResponse": {
 			"required": [
+				"namespace",
 				"workflowName",
 				"workflowAlias",
 				"applicationRevision",
 				"status",
 				"name",
-				"namespace",
 				"deployTime",
 				"deployUser",
 				"note",
@@ -8048,14 +9397,14 @@
 		},
 		"v1.DetailWorkflowResponse": {
 			"required": [
-				"name",
+				"createTime",
 				"alias",
 				"description",
 				"enable",
-				"envName",
-				"createTime",
+				"updateTime",
+				"name",
 				"default",
-				"updateTime"
+				"envName"
 			],
 			"properties": {
 				"alias": {
@@ -8125,6 +9474,9 @@
 					"items": {
 						"type": "string"
 					}
+				},
+				"version": {
+					"type": "string"
 				}
 			}
 		},
@@ -8428,6 +9780,19 @@
 				}
 			}
 		},
+		"v1.ListEnabledAddonResponse": {
+			"required": [
+				"enabledAddons"
+			],
+			"properties": {
+				"enabledAddons": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/v1.AddonBaseStatus"
+					}
+				}
+			}
+		},
 		"v1.ListEnvResponse": {
 			"required": [
 				"envs",
@@ -8443,19 +9808,6 @@
 				"total": {
 					"type": "integer",
 					"format": "int64"
-				}
-			}
-		},
-		"v1.ListPolicyDefinitionResponse": {
-			"required": [
-				"policyDefinitions"
-			],
-			"properties": {
-				"policyDefinitions": {
-					"type": "array",
-					"items": {
-						"$ref": "#/definitions/v1.PolicyDefinition"
-					}
 				}
 			}
 		},
@@ -8477,6 +9829,24 @@
 				}
 			}
 		},
+		"v1.ListProjectUsersResponse": {
+			"required": [
+				"users",
+				"total"
+			],
+			"properties": {
+				"total": {
+					"type": "integer",
+					"format": "int64"
+				},
+				"users": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/v1.ProjectUserBase"
+					}
+				}
+			}
+		},
 		"v1.ListRevisionsResponse": {
 			"required": [
 				"revisions",
@@ -8487,6 +9857,24 @@
 					"type": "array",
 					"items": {
 						"$ref": "#/definitions/v1.ApplicationRevisionBase"
+					}
+				},
+				"total": {
+					"type": "integer",
+					"format": "int64"
+				}
+			}
+		},
+		"v1.ListRolesResponse": {
+			"required": [
+				"total",
+				"roles"
+			],
+			"properties": {
+				"roles": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/v1.RoleBase"
 					}
 				},
 				"total": {
@@ -8593,6 +9981,61 @@
 				}
 			}
 		},
+		"v1.LoginUserInfoResponse": {
+			"required": [
+				"lastLoginTime",
+				"name",
+				"email",
+				"disabled",
+				"createTime",
+				"projects",
+				"platformPermissions",
+				"projectPermissions"
+			],
+			"properties": {
+				"alias": {
+					"type": "string"
+				},
+				"createTime": {
+					"type": "string",
+					"format": "date-time"
+				},
+				"disabled": {
+					"type": "boolean"
+				},
+				"email": {
+					"type": "string"
+				},
+				"lastLoginTime": {
+					"type": "string",
+					"format": "date-time"
+				},
+				"name": {
+					"type": "string"
+				},
+				"platformPermissions": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/v1.PermissionBase"
+					}
+				},
+				"projectPermissions": {
+					"type": "object",
+					"additionalProperties": {
+						"type": "array",
+						"items": {
+							"$ref": "#/definitions/v1.PermissionBase"
+						}
+					}
+				},
+				"projects": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/v1.ProjectBase"
+					}
+				}
+			}
+		},
 		"v1.NameAlias": {
 			"required": [
 				"name",
@@ -8640,6 +10083,48 @@
 				}
 			}
 		},
+		"v1.PermissionBase": {
+			"required": [
+				"name",
+				"alias",
+				"resources",
+				"actions",
+				"effect",
+				"createTime",
+				"updateTime"
+			],
+			"properties": {
+				"actions": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"alias": {
+					"type": "string"
+				},
+				"createTime": {
+					"type": "string",
+					"format": "date-time"
+				},
+				"effect": {
+					"type": "string"
+				},
+				"name": {
+					"type": "string"
+				},
+				"resources": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"updateTime": {
+					"type": "string",
+					"format": "date-time"
+				}
+			}
+		},
 		"v1.PolicyBase": {
 			"required": [
 				"name",
@@ -8648,7 +10133,8 @@
 				"creator",
 				"properties",
 				"createTime",
-				"updateTime"
+				"updateTime",
+				"envName"
 			],
 			"properties": {
 				"createTime": {
@@ -8659,6 +10145,9 @@
 					"type": "string"
 				},
 				"description": {
+					"type": "string"
+				},
+				"envName": {
 					"type": "string"
 				},
 				"name": {
@@ -8673,27 +10162,6 @@
 				"updateTime": {
 					"type": "string",
 					"format": "date-time"
-				}
-			}
-		},
-		"v1.PolicyDefinition": {
-			"required": [
-				"name",
-				"description",
-				"parameters"
-			],
-			"properties": {
-				"description": {
-					"type": "string"
-				},
-				"name": {
-					"type": "string"
-				},
-				"parameters": {
-					"type": "array",
-					"items": {
-						"$ref": "#/definitions/types.Parameter"
-					}
 				}
 			}
 		},
@@ -8719,6 +10187,9 @@
 				"name": {
 					"type": "string"
 				},
+				"owner": {
+					"$ref": "#/definitions/v1.NameAlias"
+				},
 				"updateTime": {
 					"type": "string",
 					"format": "date-time"
@@ -8728,15 +10199,21 @@
 		"v1.ProjectUserBase": {
 			"required": [
 				"name",
-				"alias",
-				"userRoles"
+				"userRoles",
+				"createTime",
+				"updateTime"
 			],
 			"properties": {
-				"alias": {
-					"type": "string"
+				"createTime": {
+					"type": "string",
+					"format": "date-time"
 				},
 				"name": {
 					"type": "string"
+				},
+				"updateTime": {
+					"type": "string",
+					"format": "date-time"
 				},
 				"userRoles": {
 					"type": "array",
@@ -8761,12 +10238,108 @@
 				}
 			}
 		},
+		"v1.RoleBase": {
+			"required": [
+				"createTime",
+				"updateTime",
+				"name",
+				"permissions"
+			],
+			"properties": {
+				"alias": {
+					"type": "string"
+				},
+				"createTime": {
+					"type": "string",
+					"format": "date-time"
+				},
+				"name": {
+					"type": "string"
+				},
+				"permissions": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/v1.NameAlias"
+					}
+				},
+				"updateTime": {
+					"type": "string",
+					"format": "date-time"
+				}
+			}
+		},
 		"v1.SimpleResponse": {
 			"required": [
 				"status"
 			],
 			"properties": {
 				"status": {
+					"type": "string"
+				}
+			}
+		},
+		"v1.StatisticInfo": {
+			"properties": {
+				"appCount": {
+					"type": "string"
+				},
+				"clusterCount": {
+					"type": "string"
+				},
+				"componentDefinitionTopList": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"enableAddonList": {
+					"type": "object",
+					"additionalProperties": {
+						"type": "string"
+					}
+				},
+				"policyDefinitionTopList": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"traitDefinitionTopList": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				},
+				"updateTime": {
+					"type": "string",
+					"format": "date-time"
+				},
+				"workflowDefinitionTopList": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				}
+			}
+		},
+		"v1.SystemInfo": {
+			"required": [
+				"platformID",
+				"enableCollection",
+				"loginType"
+			],
+			"properties": {
+				"enableCollection": {
+					"type": "boolean"
+				},
+				"installTime": {
+					"type": "string",
+					"format": "date-time"
+				},
+				"loginType": {
+					"type": "string"
+				},
+				"platformID": {
 					"type": "string"
 				}
 			}
@@ -8782,38 +10355,38 @@
 				},
 				"loginType": {
 					"type": "string"
+				},
+				"velaAddress": {
+					"type": "string"
 				}
 			}
 		},
 		"v1.SystemInfoResponse": {
 			"required": [
-				"installID",
+				"platformID",
 				"enableCollection",
 				"loginType",
-				"updateTime",
-				"createTime",
 				"systemVersion"
 			],
 			"properties": {
-				"createTime": {
-					"type": "string",
-					"format": "date-time"
-				},
 				"enableCollection": {
 					"type": "boolean"
 				},
-				"installID": {
-					"type": "string"
+				"installTime": {
+					"type": "string",
+					"format": "date-time"
 				},
 				"loginType": {
 					"type": "string"
 				},
+				"platformID": {
+					"type": "string"
+				},
+				"statisticInfo": {
+					"$ref": "#/definitions/v1.StatisticInfo"
+				},
 				"systemVersion": {
 					"$ref": "#/definitions/v1.SystemVersion"
-				},
-				"updateTime": {
-					"type": "string",
-					"format": "date-time"
 				}
 			}
 		},
@@ -8835,7 +10408,8 @@
 			"required": [
 				"name",
 				"createTime",
-				"updateTime"
+				"updateTime",
+				"project"
 			],
 			"properties": {
 				"alias": {
@@ -8861,6 +10435,9 @@
 				"name": {
 					"type": "string"
 				},
+				"project": {
+					"$ref": "#/definitions/v1.NameAlias"
+				},
 				"updateTime": {
 					"type": "string",
 					"format": "date-time"
@@ -8877,6 +10454,12 @@
 				},
 				"gitee": {
 					"$ref": "#/definitions/addon.GiteeAddonSource"
+				},
+				"gitlab": {
+					"$ref": "#/definitions/addon.GitlabAddonSource"
+				},
+				"helm": {
+					"$ref": "#/definitions/addon.HelmSource"
 				},
 				"oss": {
 					"$ref": "#/definitions/addon.OSSAddonSource"
@@ -8949,6 +10532,20 @@
 				}
 			}
 		},
+		"v1.UpdateDefinitionStatusRequest": {
+			"required": [
+				"type",
+				"hiddenInUI"
+			],
+			"properties": {
+				"hiddenInUI": {
+					"type": "boolean"
+				},
+				"type": {
+					"type": "string"
+				}
+			}
+		},
 		"v1.UpdatePolicyRequest": {
 			"required": [
 				"description",
@@ -8967,6 +10564,49 @@
 				}
 			}
 		},
+		"v1.UpdateProjectRequest": {
+			"properties": {
+				"alias": {
+					"type": "string"
+				},
+				"description": {
+					"type": "string"
+				},
+				"owner": {
+					"type": "string"
+				}
+			}
+		},
+		"v1.UpdateProjectUserRequest": {
+			"required": [
+				"userRoles"
+			],
+			"properties": {
+				"userRoles": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				}
+			}
+		},
+		"v1.UpdateRoleRequest": {
+			"required": [
+				"alias",
+				"permissions"
+			],
+			"properties": {
+				"alias": {
+					"type": "string"
+				},
+				"permissions": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					}
+				}
+			}
+		},
 		"v1.UpdateTargetRequest": {
 			"properties": {
 				"alias": {
@@ -8977,6 +10617,23 @@
 				},
 				"variable": {
 					"type": "object"
+				}
+			}
+		},
+		"v1.UpdateUISchemaRequest": {
+			"required": [
+				"type",
+				"uiSchema"
+			],
+			"properties": {
+				"type": {
+					"type": "string"
+				},
+				"uiSchema": {
+					"type": "array",
+					"items": {
+						"$ref": "#/definitions/utils.UIParameter"
+					}
 				}
 			}
 		},
@@ -9259,6 +10916,9 @@
 					"items": {
 						"type": "string"
 					}
+				},
+				"controlPlaneOnly": {
+					"type": "boolean"
 				},
 				"definitionRef": {
 					"$ref": "#/definitions/common.DefinitionReference"

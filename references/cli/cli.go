@@ -26,8 +26,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"k8s.io/klog"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"github.com/oam-dev/kubevela/apis/types"
+	velacmd "github.com/oam-dev/kubevela/pkg/cmd"
 	"github.com/oam-dev/kubevela/pkg/utils/common"
 	"github.com/oam-dev/kubevela/pkg/utils/helm"
 	"github.com/oam-dev/kubevela/pkg/utils/system"
@@ -39,8 +41,11 @@ var assumeYes bool
 
 // NewCommand will contain all commands
 func NewCommand() *cobra.Command {
-	ioStream := util.IOStreams{In: os.Stdin, Out: os.Stdout, ErrOut: os.Stderr}
+	return NewCommandWithIOStreams(util.NewDefaultIOStreams())
+}
 
+// NewCommandWithIOStreams will contain all commands and initialize them with given ioStream
+func NewCommandWithIOStreams(ioStream util.IOStreams) *cobra.Command {
 	cmds := &cobra.Command{
 		Use:                "vela",
 		DisableFlagParsing: true,
@@ -66,6 +71,7 @@ func NewCommand() *cobra.Command {
 	commandArgs := common.Args{
 		Schema: common.Scheme,
 	}
+	f := velacmd.NewDefaultFactory(config.GetConfigOrDie())
 
 	if err := system.InitDirs(); err != nil {
 		fmt.Println("InitDir err", err)
@@ -76,7 +82,7 @@ func NewCommand() *cobra.Command {
 		// Getting Start
 		NewEnvCommand(commandArgs, "3", ioStream),
 		NewInitCommand(commandArgs, "2", ioStream),
-		NewUpCommand(commandArgs, "1", ioStream),
+		NewUpCommand(f, "1", commandArgs, ioStream),
 		NewCapabilityShowCommand(commandArgs, ioStream),
 
 		// Manage Apps
@@ -89,10 +95,14 @@ func NewCommand() *cobra.Command {
 		NewLogsCommand(commandArgs, "4", ioStream),
 		NewLiveDiffCommand(commandArgs, "3", ioStream),
 		NewDryRunCommand(commandArgs, ioStream),
+		RevisionCommandGroup(commandArgs),
 
 		// Workflows
 		NewWorkflowCommand(commandArgs, ioStream),
 		ClusterCommandGroup(commandArgs, ioStream),
+
+		// Debug
+		NewDebugCommand(commandArgs, ioStream),
 
 		// Extension
 		NewAddonCommand(commandArgs, "9", ioStream),
@@ -101,6 +111,9 @@ func NewCommand() *cobra.Command {
 		NewRegistryCommand(ioStream, "6"),
 		NewTraitCommand(commandArgs, ioStream),
 		NewComponentsCommand(commandArgs, ioStream),
+		NewProviderCommand(commandArgs, "10", ioStream),
+		AuthCommandGroup(f, ioStream),
+		KubeCommandGroup(f, ioStream),
 
 		// System
 		NewInstallCommand(commandArgs, "1", ioStream),
@@ -164,7 +177,7 @@ func NewVersionListCommand(ioStream util.IOStreams) *cobra.Command {
 		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			helmHelper := helm.NewHelper()
-			versions, err := helmHelper.ListVersions(kubevelaInstallerHelmRepoURL, kubeVelaChartName, true)
+			versions, err := helmHelper.ListVersions(kubevelaInstallerHelmRepoURL, kubeVelaChartName, true, nil)
 			if err != nil {
 				return err
 			}

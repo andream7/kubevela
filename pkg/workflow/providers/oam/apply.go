@@ -23,7 +23,6 @@ import (
 	"sync"
 
 	"github.com/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -33,8 +32,6 @@ import (
 	"github.com/oam-dev/kubevela/pkg/cue/model/sets"
 	"github.com/oam-dev/kubevela/pkg/cue/model/value"
 	"github.com/oam-dev/kubevela/pkg/oam"
-	velaerrors "github.com/oam-dev/kubevela/pkg/utils/errors"
-	"github.com/oam-dev/kubevela/pkg/utils/parallel"
 	wfContext "github.com/oam-dev/kubevela/pkg/workflow/context"
 	"github.com/oam-dev/kubevela/pkg/workflow/providers"
 	wfTypes "github.com/oam-dev/kubevela/pkg/workflow/types"
@@ -50,6 +47,12 @@ type ComponentApply func(comp common.ApplicationComponent, patcher *value.Value,
 
 // ComponentRender render oam component.
 type ComponentRender func(comp common.ApplicationComponent, patcher *value.Value, clusterName string, overrideNamespace string, env string) (*unstructured.Unstructured, []*unstructured.Unstructured, error)
+
+// ComponentHealthCheck health check oam component.
+type ComponentHealthCheck func(comp common.ApplicationComponent, patcher *value.Value, clusterName string, overrideNamespace string, env string) (bool, error)
+
+// WorkloadRenderer renderer to render application component into workload
+type WorkloadRenderer func(comp common.ApplicationComponent) (*appfile.Workload, error)
 
 type provider struct {
 	render ComponentRender
@@ -135,39 +138,6 @@ func (p *provider) ApplyComponent(ctx wfContext.Context, v *value.Value, act wfT
 	return p.applyComponent(ctx, v, act, nil)
 }
 
-// ApplyComponents apply components in parallel.
-func (p *provider) ApplyComponents(ctx wfContext.Context, v *value.Value, act wfTypes.Action) error {
-	components, err := v.LookupValue("components")
-	if err != nil {
-		return err
-	}
-	parallelism, err := v.GetInt64("parallelism")
-	if err != nil {
-		return err
-	}
-	if parallelism <= 0 {
-		return errors.Errorf("parallelism cannot be smaller than 1")
-	}
-	// prepare parallel execution args
-	mu := &sync.Mutex{}
-	var parInputs [][]interface{}
-	if err = components.StepByFields(func(name string, in *value.Value) (bool, error) {
-		parInputs = append(parInputs, []interface{}{name, ctx, in, act, mu})
-		return false, nil
-	}); err != nil {
-		return errors.Wrapf(err, "failed to looping over components")
-	}
-	// parallel execution
-	outputs := parallel.Run(func(name string, ctx wfContext.Context, v *value.Value, act wfTypes.Action, mu *sync.Mutex) error {
-		if err := p.applyComponent(ctx, v, act, mu); err != nil {
-			return errors.Wrapf(err, "failed to apply component %s", name)
-		}
-		return nil
-	}, parInputs, int(parallelism))
-	// aggregate errors
-	return velaerrors.AggregateErrors(outputs.([]error))
-}
-
 func lookUpValues(v *value.Value, mu *sync.Mutex) (*common.ApplicationComponent, *value.Value, string, string, string, error) {
 	if mu != nil {
 		mu.Lock()
@@ -201,78 +171,6 @@ func lookUpValues(v *value.Value, mu *sync.Mutex) (*common.ApplicationComponent,
 	return comp, patcher, clusterName, overrideNamespace, env, nil
 }
 
-func (p *provider) loadDynamicComponent(comp *common.ApplicationComponent) (*common.ApplicationComponent, error) {
-	if comp.Type != "ref-objects" {
-		return comp, nil
-	}
-	_comp := comp.DeepCopy()
-	props := &struct {
-		Objects []struct {
-			APIVersion string            `json:"apiVersion"`
-			Kind       string            `json:"kind"`
-			Name       string            `json:"name,omitempty"`
-			Selector   map[string]string `json:"selector,omitempty"`
-		} `json:"objects"`
-	}{}
-	if err := json.Unmarshal(_comp.Properties.Raw, props); err != nil {
-		return nil, errors.Wrapf(err, "invalid properties for ref-objects")
-	}
-	var objects []*unstructured.Unstructured
-	addObj := func(un *unstructured.Unstructured) {
-		un.SetResourceVersion("")
-		un.SetGeneration(0)
-		un.SetOwnerReferences(nil)
-		un.SetDeletionTimestamp(nil)
-		un.SetManagedFields(nil)
-		un.SetUID("")
-		unstructured.RemoveNestedField(un.Object, "metadata", "creationTimestamp")
-		unstructured.RemoveNestedField(un.Object, "status")
-		// TODO(somefive): make the following logic more generalizable
-		if un.GetKind() == "Service" && un.GetAPIVersion() == "v1" {
-			if clusterIP, exist, _ := unstructured.NestedString(un.Object, "spec", "clusterIP"); exist && clusterIP != corev1.ClusterIPNone {
-				unstructured.RemoveNestedField(un.Object, "spec", "clusterIP")
-				unstructured.RemoveNestedField(un.Object, "spec", "clusterIPs")
-			}
-		}
-		objects = append(objects, un)
-	}
-	for _, obj := range props.Objects {
-		if obj.Name != "" && obj.Selector != nil {
-			return nil, errors.Errorf("invalid properties for ref-objects, name and selector cannot be both set")
-		}
-		if obj.Name == "" && obj.Selector != nil {
-			uns := &unstructured.UnstructuredList{}
-			uns.SetAPIVersion(obj.APIVersion)
-			uns.SetKind(obj.Kind)
-			if err := p.cli.List(context.Background(), uns, client.InNamespace(p.app.GetNamespace()), client.MatchingLabels(obj.Selector)); err != nil {
-				return nil, errors.Wrapf(err, "failed to load ref object %s with selector", obj.Kind)
-			}
-			for _, _un := range uns.Items {
-				addObj(_un.DeepCopy())
-			}
-		} else if obj.Selector == nil {
-			un := &unstructured.Unstructured{}
-			un.SetAPIVersion(obj.APIVersion)
-			un.SetKind(obj.Kind)
-			un.SetName(obj.Name)
-			un.SetNamespace(p.app.GetNamespace())
-			if obj.Name == "" {
-				un.SetName(comp.Name)
-			}
-			if err := p.cli.Get(context.Background(), client.ObjectKeyFromObject(un), un); err != nil {
-				return nil, errors.Wrapf(err, "failed to load ref object %s %s/%s", un.GetKind(), un.GetNamespace(), un.GetName())
-			}
-			addObj(un)
-		}
-	}
-	bs, err := json.Marshal(map[string]interface{}{"objects": objects})
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to marshal loaded ref-objects")
-	}
-	_comp.Properties.Raw = bs
-	return _comp, nil
-}
-
 // LoadComponent load component describe info in application.
 func (p *provider) LoadComponent(ctx wfContext.Context, v *value.Value, act wfTypes.Action) error {
 	app := &v1beta1.Application{}
@@ -290,7 +188,7 @@ func (p *provider) LoadComponent(ctx wfContext.Context, v *value.Value, act wfTy
 		}
 	}
 	for _, _comp := range app.Spec.Components {
-		comp, err := p.loadDynamicComponent(_comp.DeepCopy())
+		comp, err := p.af.LoadDynamicComponent(context.Background(), p.cli, _comp.DeepCopy())
 		if err != nil {
 			return err
 		}
@@ -329,7 +227,7 @@ func (p *provider) LoadComponentInOrder(ctx wfContext.Context, v *value.Value, a
 	}
 	comps := make([]common.ApplicationComponent, len(app.Spec.Components))
 	for idx, _comp := range app.Spec.Components {
-		comp, err := p.loadDynamicComponent(_comp.DeepCopy())
+		comp, err := p.af.LoadDynamicComponent(context.Background(), p.cli, _comp.DeepCopy())
 		if err != nil {
 			return err
 		}
@@ -353,31 +251,6 @@ func (p *provider) LoadPolicies(ctx wfContext.Context, v *value.Value, act wfTyp
 	return nil
 }
 
-func (p *provider) LoadPoliciesInOrder(ctx wfContext.Context, v *value.Value, act wfTypes.Action) error {
-	policyMap := map[string]v1beta1.AppPolicy{}
-	var specifiedPolicyNames []string
-	specifiedPolicyNamesRaw, err := v.LookupValue("input")
-	if err != nil || specifiedPolicyNamesRaw == nil {
-		for _, policy := range p.app.Spec.Policies {
-			specifiedPolicyNames = append(specifiedPolicyNames, policy.Name)
-		}
-	} else if err = specifiedPolicyNamesRaw.UnmarshalTo(&specifiedPolicyNames); err != nil {
-		return errors.Wrapf(err, "failed to parse specified policy names")
-	}
-	for _, policy := range p.af.Policies {
-		policyMap[policy.Name] = policy
-	}
-	var specifiedPolicies []v1beta1.AppPolicy
-	for _, policyName := range specifiedPolicyNames {
-		if policy, found := policyMap[policyName]; found {
-			specifiedPolicies = append(specifiedPolicies, policy)
-		} else {
-			return errors.Errorf("policy %s not found", policyName)
-		}
-	}
-	return v.FillObject(specifiedPolicies, "output")
-}
-
 // Install register handlers to provider discover.
 func Install(p providers.Providers, app *v1beta1.Application, af *appfile.Appfile, cli client.Client, apply ComponentApply, render ComponentRender) {
 	prd := &provider{
@@ -388,12 +261,10 @@ func Install(p providers.Providers, app *v1beta1.Application, af *appfile.Appfil
 		cli:    cli,
 	}
 	p.Register(ProviderName, map[string]providers.Handler{
-		"component-render":       prd.RenderComponent,
-		"component-apply":        prd.ApplyComponent,
-		"components-apply":       prd.ApplyComponents,
-		"load":                   prd.LoadComponent,
-		"load-policies":          prd.LoadPolicies,
-		"load-policies-in-order": prd.LoadPoliciesInOrder,
-		"load-comps-in-order":    prd.LoadComponentInOrder,
+		"component-render":    prd.RenderComponent,
+		"component-apply":     prd.ApplyComponent,
+		"load":                prd.LoadComponent,
+		"load-policies":       prd.LoadPolicies,
+		"load-comps-in-order": prd.LoadComponentInOrder,
 	})
 }

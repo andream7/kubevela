@@ -17,8 +17,11 @@ limitations under the License.
 package utils
 
 import (
+	"net/url"
+	"path"
 	"reflect"
 	"sort"
+	"strings"
 )
 
 // StringsContain strings contain
@@ -62,4 +65,92 @@ func EqualSlice(a, b []string) bool {
 	sort.Strings(a)
 	sort.Strings(b)
 	return reflect.DeepEqual(a, b)
+}
+
+// SliceIncludeSlice the a slice include the b slice
+func SliceIncludeSlice(a, b []string) bool {
+	if EqualSlice(a, b) {
+		return true
+	}
+	for _, item := range b {
+		if !StringsContain(a, item) {
+			return false
+		}
+	}
+	return true
+}
+
+// MapKey2Array convery map keys to array
+func MapKey2Array(source map[string]string) []string {
+	var list []string
+	for k := range source {
+		list = append(list, k)
+	}
+	return list
+}
+
+// GetBoxDrawingString get line drawing string, see https://en.wikipedia.org/wiki/Box-drawing_character
+// nolint:gocyclo
+func GetBoxDrawingString(up bool, down bool, left bool, right bool, padLeft int, padRight int) string {
+	var c rune
+	switch {
+	case up && down && left && right:
+		c = '┼'
+	case up && down && left && !right:
+		c = '┤'
+	case up && down && !left && right:
+		c = '├'
+	case up && down && !left && !right:
+		c = '│'
+	case up && !down && left && right:
+		c = '┴'
+	case up && !down && left && !right:
+		c = '┘'
+	case up && !down && !left && right:
+		c = '└'
+	case up && !down && !left && !right:
+		c = '╵'
+	case !up && down && left && right:
+		c = '┬'
+	case !up && down && left && !right:
+		c = '┐'
+	case !up && down && !left && right:
+		c = '┌'
+	case !up && down && !left && !right:
+		c = '╷'
+	case !up && !down && left && right:
+		c = '─'
+	case !up && !down && left && !right:
+		c = '╴'
+	case !up && !down && !left && right:
+		c = '╶'
+	case !up && !down && !left && !right:
+		c = ' '
+	}
+	sb := strings.Builder{}
+	writePadding := func(connect bool, width int) {
+		for i := 0; i < width; i++ {
+			if connect {
+				sb.WriteRune('─')
+			} else {
+				sb.WriteRune(' ')
+			}
+		}
+	}
+	writePadding(left, padLeft)
+	sb.WriteRune(c)
+	writePadding(right, padRight)
+	return sb.String()
+}
+
+// JoinURL join baseURL and subPath to be new URL
+func JoinURL(baseURL, subPath string) (string, error) {
+	parsedURL, err := url.Parse(baseURL)
+	if err != nil {
+		return "", err
+	}
+	parsedURL.RawPath = path.Join(parsedURL.RawPath, subPath)
+	parsedURL.Path = path.Join(parsedURL.Path, subPath)
+	URL := parsedURL.String()
+	return URL, nil
 }

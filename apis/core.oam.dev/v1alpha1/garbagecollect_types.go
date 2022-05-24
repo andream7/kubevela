@@ -33,23 +33,39 @@ type GarbageCollectPolicySpec struct {
 	// outdated resources will be kept until resourcetracker be deleted manually
 	KeepLegacyResource bool `json:"keepLegacyResource,omitempty"`
 
+	// Order defines the order of garbage collect
+	Order GarbageCollectOrder `json:"order,omitempty"`
+
 	// Rules defines list of rules to control gc strategy at resource level
 	// if one resource is controlled by multiple rules, first rule will be used
 	Rules []GarbageCollectPolicyRule `json:"rules,omitempty"`
 }
 
+// GarbageCollectOrder is the order of garbage collect
+type GarbageCollectOrder string
+
+const (
+	// OrderDependency is the order of dependency
+	OrderDependency GarbageCollectOrder = "dependency"
+)
+
 // GarbageCollectPolicyRule defines a single garbage-collect policy rule
 type GarbageCollectPolicyRule struct {
-	Selector GarbageCollectPolicyRuleSelector `json:"selector"`
-	Strategy GarbageCollectStrategy           `json:"strategy"`
+	Selector ResourcePolicyRuleSelector `json:"selector"`
+	Strategy GarbageCollectStrategy     `json:"strategy"`
 }
 
-// GarbageCollectPolicyRuleSelector select the targets of the rule
-// if both traitTypes and componentTypes are specified, combination logic is OR
-// if one resources are specified with conflict strategy, strategy as component go first.
-type GarbageCollectPolicyRuleSelector struct {
-	TraitTypes []string `json:"traitTypes"`
-	CompTypes  []string `json:"componentTypes"`
+// ResourcePolicyRuleSelector select the targets of the rule
+// 1) for GarbageCollectPolicyRule
+// if both traitTypes, oamTypes and componentTypes are specified, combination logic is OR
+// if one resource is specified with conflict strategies, strategy as component go first.
+// 2) for ApplyOncePolicyRule only CompNames and ResourceTypes are used
+type ResourcePolicyRuleSelector struct {
+	CompNames        []string `json:"componentNames"`
+	CompTypes        []string `json:"componentTypes"`
+	OAMResourceTypes []string `json:"oamTypes"`
+	TraitTypes       []string `json:"traitTypes"`
+	ResourceTypes    []string `json:"resourceTypes"`
 }
 
 // GarbageCollectStrategy the strategy for target resource to recycle
@@ -68,27 +84,24 @@ const (
 // FindStrategy find gc strategy for target resource
 func (in GarbageCollectPolicySpec) FindStrategy(manifest *unstructured.Unstructured) *GarbageCollectStrategy {
 	for _, rule := range in.Rules {
-		var (
-			compType  string
-			traitType string
-		)
-		if manifest.GetLabels() != nil {
-			traitType = manifest.GetLabels()[oam.TraitTypeLabel]
-			compType = manifest.GetLabels()[oam.WorkloadTypeLabel]
+		var compName, compType, oamType, traitType string
+		if labels := manifest.GetLabels(); labels != nil {
+			compName = labels[oam.LabelAppComponent]
+			compType = labels[oam.WorkloadTypeLabel]
+			oamType = labels[oam.LabelOAMResourceType]
+			traitType = labels[oam.TraitTypeLabel]
 		}
-		if compType != "" {
-			for _, _compType := range rule.Selector.CompTypes {
-				if _compType == compType {
-					return &rule.Strategy
-				}
+		match := func(src []string, val string) (found bool) {
+			for _, _val := range src {
+				found = found || _val == val
 			}
+			return val != "" && found
 		}
-		if traitType != "" {
-			for _, _traitType := range rule.Selector.TraitTypes {
-				if _traitType == traitType {
-					return &rule.Strategy
-				}
-			}
+		if match(rule.Selector.CompNames, compName) ||
+			match(rule.Selector.CompTypes, compType) ||
+			match(rule.Selector.OAMResourceTypes, oamType) ||
+			match(rule.Selector.TraitTypes, traitType) {
+			return &rule.Strategy
 		}
 	}
 	return nil

@@ -19,7 +19,6 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,11 +29,15 @@ import (
 	"strings"
 	"time"
 
+	flag "github.com/spf13/pflag"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 
+	apicommon "github.com/oam-dev/kubevela/apis/core.oam.dev/common"
+	"github.com/oam-dev/kubevela/apis/types"
 	"github.com/oam-dev/kubevela/pkg/auth"
 	ctrlClient "github.com/oam-dev/kubevela/pkg/client"
 	standardcontroller "github.com/oam-dev/kubevela/pkg/controller"
@@ -43,12 +46,13 @@ import (
 	oamv1alpha2 "github.com/oam-dev/kubevela/pkg/controller/core.oam.dev/v1alpha2"
 	"github.com/oam-dev/kubevela/pkg/controller/utils"
 	"github.com/oam-dev/kubevela/pkg/cue/packages"
-	_ "github.com/oam-dev/kubevela/pkg/features"
+	"github.com/oam-dev/kubevela/pkg/features"
 	_ "github.com/oam-dev/kubevela/pkg/monitor/metrics"
 	"github.com/oam-dev/kubevela/pkg/multicluster"
 	"github.com/oam-dev/kubevela/pkg/oam"
 	"github.com/oam-dev/kubevela/pkg/oam/discoverymapper"
 	"github.com/oam-dev/kubevela/pkg/resourcekeeper"
+	pkgutils "github.com/oam-dev/kubevela/pkg/utils"
 	"github.com/oam-dev/kubevela/pkg/utils/common"
 	"github.com/oam-dev/kubevela/pkg/utils/system"
 	"github.com/oam-dev/kubevela/pkg/utils/util"
@@ -56,10 +60,6 @@ import (
 	"github.com/oam-dev/kubevela/pkg/workflow"
 	"github.com/oam-dev/kubevela/pkg/workflow/tasks/custom"
 	"github.com/oam-dev/kubevela/version"
-)
-
-const (
-	kubevelaName = "kubevela"
 )
 
 var (
@@ -147,6 +147,7 @@ func main() {
 	flag.IntVar(&workflow.MaxWorkflowWaitBackoffTime, "max-workflow-wait-backoff-time", 60, "Set the max workflow wait backoff time, default is 60")
 	flag.IntVar(&workflow.MaxWorkflowFailedBackoffTime, "max-workflow-failed-backoff-time", 300, "Set the max workflow wait backoff time, default is 300")
 	flag.IntVar(&custom.MaxWorkflowStepErrorRetryTimes, "max-workflow-step-error-retry-times", 10, "Set the max workflow step error retry times, default is 10")
+	utilfeature.DefaultMutableFeatureGate.AddFlag(flag.CommandLine)
 
 	flag.Parse()
 	// setup logging
@@ -200,10 +201,23 @@ func main() {
 	klog.InfoS("Vela-Core init", "definition namespace", oam.SystemDefinitonNamespace)
 
 	restConfig := ctrl.GetConfigOrDie()
-	restConfig.UserAgent = kubevelaName + "/" + version.GitRevision
+	restConfig.UserAgent = types.KubeVelaName + "/" + version.GitRevision
 	restConfig.QPS = float32(qps)
 	restConfig.Burst = burst
 	restConfig.Wrap(auth.NewImpersonatingRoundTripper)
+	if utilfeature.DefaultMutableFeatureGate.Enabled(features.ControllerAutoImpersonation) {
+		restConfig.Impersonate.UserName = types.VelaCoreName
+		restConfig.Impersonate.Groups = []string{apicommon.Group}
+		pkgutils.AutoSetSelfImpersonationInConfig(restConfig)
+	}
+	klog.InfoS("Kubernetes Config Loaded",
+		"UserAgent", restConfig.UserAgent,
+		"QPS", restConfig.QPS,
+		"Burst", restConfig.Burst,
+		"Auto-Impersonation", utilfeature.DefaultMutableFeatureGate.Enabled(features.ControllerAutoImpersonation),
+		"Impersonate-User", restConfig.Impersonate.UserName,
+		"Impersonate-Group", strings.Join(restConfig.Impersonate.Groups, ","),
+	)
 
 	// wrapper the round tripper by multi cluster rewriter
 	if enableClusterGateway {
@@ -223,7 +237,7 @@ func main() {
 	}
 	ctrl.SetLogger(klogr.New())
 
-	leaderElectionID := util.GenerateLeaderElectionID(kubevelaName, controllerArgs.IgnoreAppWithoutControllerRequirement)
+	leaderElectionID := util.GenerateLeaderElectionID(types.KubeVelaName, controllerArgs.IgnoreAppWithoutControllerRequirement)
 	mgr, err := ctrl.NewManager(restConfig, ctrl.Options{
 		Scheme:                     scheme,
 		MetricsBindAddress:         metricsAddr,
